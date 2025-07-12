@@ -1,1 +1,0 @@
-pyinstaller NovelGameProductionSupportTool.py --onefile

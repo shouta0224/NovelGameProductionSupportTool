@@ -1,18 +1,14 @@
 import uuid
 
-class IPlugin:
-    """プラグインインターフェース"""
+class IPlugin: # プラグインインターフェース.
     def __init__(self, app):
-        self.app = app  # メインアプリケーションへの参照
+        self.app = app
     
-    def setup(self):
-        """プラグインの初期化"""
+    def setup(self): # プラグインの初期化.
         pass
     
-    def register(self):
-        """機能の登録"""
+    def register(self): # 機能の登録.
         pass
     
-    def teardown(self):
-        """終了処理"""
+    def teardown(self): # 終了処理.
         pass

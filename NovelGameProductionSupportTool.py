@@ -10,25 +10,20 @@ import os
 from pathlib import Path
 from typing import List, Dict, Type
 
-class IPlugin:
-    """プラグインインターフェース"""
+class IPlugin: # プラグインインターフェース.
     def __init__(self, app):
         self.app = app  # メインアプリケーションへの参照
     
-    def setup(self):
-        """プラグインの初期化"""
+    def setup(self): # プラグインの初期化.
         pass
     
-    def register(self):
-        """機能の登録"""
+    def register(self): # 機能の登録.
         pass
     
-    def teardown(self):
-        """終了処理"""
+    def teardown(self): # 終了処理.
         pass
 
-class PluginManager:
-    """プラグインマネージャー"""
+class PluginManager: # プラグインマネージャー.
     def __init__(self, app):
         self.app = app
         self.plugins: Dict[str, IPlugin] = {}
@@ -37,13 +32,11 @@ class PluginManager:
         # プラグインディレクトリがなければ作成
         os.makedirs(self.plugin_dir, exist_ok=True)
     
-    def discover_plugins(self) -> List[str]:
-        """利用可能なプラグインを探索"""
+    def discover_plugins(self) -> List[str]: # 利用可能なプラグインを探索.
         plugin_files = Path(self.plugin_dir).glob("*.py")
         return [f.stem for f in plugin_files if f.is_file() and not f.name.startswith("_")]
     
-    def load_plugin(self, plugin_name: str) -> bool:
-        """プラグインをロード"""
+    def load_plugin(self, plugin_name: str) -> bool: # プラグインをロード.
         if plugin_name in self.plugins:
             return False
         
@@ -287,7 +280,7 @@ class NovelGameEditor:
         
         self.root.config(menu=menubar)
     
-    def create_widgets(self):
+    def create_widgets(self): 
         # 分割フレーム
         self.main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.main_paned.pack(fill=tk.BOTH, expand=True)
@@ -328,6 +321,7 @@ class NovelGameEditor:
         ttk.Label(self.scene_info_frame, text="内容:").grid(row=1, column=0, sticky="nw")
         self.scene_content_text = tk.Text(self.scene_info_frame, height=20, wrap=tk.WORD)  # heightを15から20に増加
         self.scene_content_text.grid(row=1, column=1, sticky="nsew", padx=5, pady=2)
+        self.scene_content_text.bind("<FocusOut>", self.on_scene_content_changed)
         
         # スクロールバーを追加
         text_scroll = ttk.Scrollbar(self.scene_info_frame, orient=tk.VERTICAL, command=self.scene_content_text.yview)
@@ -397,7 +391,7 @@ class NovelGameEditor:
         if not hasattr(self, 'menubar'):
             # メニューバーがまだ作成されていない場合は、ここで作成し、再度メニュー追加を試みる
             # (ただし、これはより複雑な処理になる可能性があるため、通常はcreate_menuで最初に作る)
-            # 一旦ここでは、既にmenubarがあることを前提とします。
+            # 一旦ここでは、既にmenubarがあることを前提とする
             print("Error: Menubar not created yet.")
             return
 
@@ -412,8 +406,8 @@ class NovelGameEditor:
         if plugin_menu is None:
             plugin_menu = tk.Menu(self.menubar, tearoff=0, title=parent_menu_label)
             self.menubar.add_cascade(label=parent_menu_label, menu=plugin_menu)
-            # Note: メニューバーの構造によっては、追加する順序も重要になる場合があります。
-            # ここでは単純に追加していますが、必要に応じてメニューバーの構造を操作する必要があります。
+            # Note: メニューバーの構造によっては、追加する順序も重要になる場合がある
+            # ここでは単純に追加しているが、必要に応じてメニューバーの構造を操作する必要がある
 
         plugin_menu.add_command(label=label, command=command)
     
@@ -466,13 +460,27 @@ class NovelGameEditor:
         # 設定変更後、ショートカットを再設定
         self.setup_shortcuts()
 
-    def on_scene_name_changed(self, event):
-        """シーン名が変更された時の処理"""
+    def on_scene_content_changed(self, event):
+        """シーン内容がフォーカスを失ったときに呼ばれる"""
         if self.selected_scene:
+            current_content = self.scene_content_text.get("1.0", tk.END).strip()
+            if current_content != self.selected_scene.content:
+                self.selected_scene.content = current_content
+
+    def on_scene_name_changed(self, event):
+        """シーン名または内容が変更された時の処理"""
+        if self.selected_scene:
+            # シーン名の更新
             new_name = self.scene_name_entry.get().strip()
             if new_name and new_name != self.selected_scene.name:
                 self.selected_scene.name = new_name
-                self.draw_scenes()  # 分岐図を再描画して新しい名前を反映
+            
+            # シーン内容の更新
+            current_content = self.scene_content_text.get("1.0", tk.END).strip()
+            if current_content != self.selected_scene.content:
+                self.selected_scene.content = current_content
+            
+            self.draw_scenes()  # 分岐図を再描画して新しい名前を反映
 
     def update_editor_state(self):
         """エディタの状態を更新"""
@@ -536,12 +544,24 @@ class NovelGameEditor:
                 messagebox.showerror("エラー", f"プロジェクトの読み込みに失敗しました:\n{str(e)}")
     
     def save_project(self):
+        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる
+        if self.selected_scene:
+            # シーン名も念のため最新のものに更新
+            self.selected_scene.name = self.scene_name_entry.get().strip() 
+            # シーン内容も最新のものに更新
+            self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
+            
         if self.current_project:
             self.save_to_file(self.current_project)
         else:
             self.save_project_as()
     
     def save_project_as(self):
+        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる
+        if self.selected_scene:
+            self.selected_scene.name = self.scene_name_entry.get().strip()
+            self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
+            
         file_path = filedialog.asksaveasfilename(
             title="プロジェクトを保存",
             defaultextension=".ngp",
