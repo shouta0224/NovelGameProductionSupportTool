@@ -2,6 +2,105 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import json
 import uuid
+import configparser
+from tkinter import simpledialog
+
+class ConfigManager:
+    def __init__(self):
+        self.config = configparser.ConfigParser()
+        self.config_file = "config.ini"
+        self.load_config()
+    
+    def load_config(self):
+        # 修正後のデフォルト設定
+        self.config['SHORTCUTS'] = {
+            'new_project': 'Control-n',
+            'open_project': 'Control-o',
+            'save_project': 'Control-s',
+            'add_scene': 'Control-a',
+            'delete_scene': 'Control-d'
+        }
+        
+        try:
+            with open(self.config_file, 'r') as f:
+                self.config.read_file(f)
+        except FileNotFoundError:
+            self.save_config()
+    
+    def save_config(self):
+        with open(self.config_file, 'w') as f:
+            self.config.write(f)
+    
+    def get_shortcut(self, action):
+        return self.config['SHORTCUTS'].get(action, '')
+    
+    def get_shortcut_display(self, action):
+        """メニュー表示用のショートカット文字列を返す"""
+        shortcut = self.get_shortcut(action)
+        return shortcut.replace('Control-', 'Ctrl+').title()
+
+class SettingsDialog(tk.Toplevel):
+    def __init__(self, parent, config_manager):
+        super().__init__(parent)
+        self.title("設定")
+        self.config_manager = config_manager
+        self.transient(parent)
+        self.grab_set()
+        
+        self.create_widgets()
+        self.resizable(False, False)
+        self.wait_window(self)
+    
+    def create_widgets(self):
+        ttk.Label(self, text="ショートカットキー設定").grid(row=0, column=0, columnspan=2, pady=5)
+        
+        # 新規プロジェクト
+        ttk.Label(self, text="新規プロジェクト:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.new_project_entry = ttk.Entry(self)
+        self.new_project_entry.grid(row=1, column=1, padx=5, pady=2)
+        self.new_project_entry.insert(0, self.config_manager.get_shortcut('new_project'))
+        
+        # プロジェクトを開く
+        ttk.Label(self, text="プロジェクトを開く:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.open_project_entry = ttk.Entry(self)
+        self.open_project_entry.grid(row=2, column=1, padx=5, pady=2)
+        self.open_project_entry.insert(0, self.config_manager.get_shortcut('open_project'))
+        
+        # プロジェクトを保存
+        ttk.Label(self, text="プロジェクトを保存:").grid(row=3, column=0, sticky="w", padx=5, pady=2)
+        self.save_project_entry = ttk.Entry(self)
+        self.save_project_entry.grid(row=3, column=1, padx=5, pady=2)
+        self.save_project_entry.insert(0, self.config_manager.get_shortcut('save_project'))
+        
+        # シーンを追加
+        ttk.Label(self, text="シーンを追加:").grid(row=4, column=0, sticky="w", padx=5, pady=2)
+        self.add_scene_entry = ttk.Entry(self)
+        self.add_scene_entry.grid(row=4, column=1, padx=5, pady=2)
+        self.add_scene_entry.insert(0, self.config_manager.get_shortcut('add_scene'))
+        
+        # シーンを削除
+        ttk.Label(self, text="シーンを削除:").grid(row=5, column=0, sticky="w", padx=5, pady=2)
+        self.delete_scene_entry = ttk.Entry(self)
+        self.delete_scene_entry.grid(row=5, column=1, padx=5, pady=2)
+        self.delete_scene_entry.insert(0, self.config_manager.get_shortcut('delete_scene'))
+        
+        # ボタンフレーム
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=5)
+        
+        ttk.Button(button_frame, text="保存", command=self.save_settings).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="キャンセル", command=self.destroy).pack(side=tk.LEFT, padx=5)
+    
+    def save_settings(self):
+        self.config_manager.config['SHORTCUTS'] = {
+            'new_project': self.new_project_entry.get(),
+            'open_project': self.open_project_entry.get(),
+            'save_project': self.save_project_entry.get(),
+            'add_scene': self.add_scene_entry.get(),
+            'delete_scene': self.delete_scene_entry.get()
+        }
+        self.config_manager.save_config()
+        self.destroy()
 
 class Scene:
     def __init__(self, name="New Scene", content="", x=0, y=0):
@@ -42,21 +141,55 @@ class NovelGameEditor:
         self.root.title("ノベルゲーム制作支援ツール")
         self.root.geometry("1200x800")
         
+        self.config_manager = ConfigManager()
         self.current_project = None
         self.scenes = []
         self.selected_scene = None
         self.drag_data = {"x": 0, "y": 0, "item": None}
-
-        self.add_branch_btn = None
-        self.edit_branch_btn = None
-        self.delete_branch_btn = None
         
         self.create_widgets()
         self.create_menu()
-
+        self.setup_shortcuts()
+        
         self.scene_name_entry.bind("<FocusOut>", self.on_scene_name_changed)
         self.scene_name_entry.bind("<Return>", self.on_scene_name_changed)
-        self.canvas.bind("<Button-3>", self.on_canvas_right_click)
+        self.canvas.bind("<Button-3>", self.show_context_menu)
+    
+    def setup_shortcuts(self):
+        # ショートカットキーの設定
+        shortcuts = {
+            self.config_manager.get_shortcut('new_project'): self.new_project,
+            self.config_manager.get_shortcut('open_project'): self.open_project,
+            self.config_manager.get_shortcut('save_project'): self.save_project,
+            self.config_manager.get_shortcut('add_scene'): self.add_scene,
+            self.config_manager.get_shortcut('delete_scene'): self.delete_scene
+        }
+        
+        for shortcut, command in shortcuts.items():
+            if shortcut:
+                self.root.bind(f"<{shortcut}>", lambda e, cmd=command: cmd())
+    
+    def show_context_menu(self, event):
+        """右クリックメニューを表示"""
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(
+            label="シーンを追加", 
+            command=lambda: self.on_canvas_right_click(event),
+            accelerator=self.config_manager.get_shortcut('add_scene')
+        )
+        menu.add_separator()
+        menu.add_command(label="設定", command=self.show_settings)
+        
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+    
+    def show_settings(self):
+        """設定ダイアログを表示"""
+        SettingsDialog(self.root, self.config_manager)
+        # 設定変更後、ショートカットを再設定
+        self.setup_shortcuts()
 
     def on_scene_name_changed(self, event):
         """シーン名が変更された時の処理"""
@@ -88,14 +221,46 @@ class NovelGameEditor:
     def create_menu(self):
         menubar = tk.Menu(self.root)
         
+        # ファイルメニュー
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="新規プロジェクト", command=self.new_project)
-        file_menu.add_command(label="プロジェクトを開く", command=self.open_project)
-        file_menu.add_command(label="プロジェクトを保存", command=self.save_project)
-        file_menu.add_command(label="名前を付けて保存", command=self.save_project_as)
+        file_menu.add_command(
+            label="新規プロジェクト", 
+            command=self.new_project,
+            accelerator=self.config_manager.get_shortcut_display('new_project')
+        )
+        file_menu.add_command(
+            label="プロジェクトを開く", 
+            command=self.open_project,
+            accelerator=self.config_manager.get_shortcut_display('open_project')
+        )
+        file_menu.add_command(
+            label="プロジェクトを保存", 
+            command=self.save_project,
+            accelerator=self.config_manager.get_shortcut_display('save_project')
+        )
+        file_menu.add_command(
+            label="名前を付けて保存", 
+            command=self.save_project_as
+        )
+        file_menu.add_separator()
+        file_menu.add_command(label="設定", command=self.show_settings)
         file_menu.add_separator()
         file_menu.add_command(label="終了", command=self.root.quit)
         menubar.add_cascade(label="ファイル", menu=file_menu)
+        
+        # 編集メニュー
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(
+            label="シーンを追加", 
+            command=self.add_scene,
+            accelerator=self.config_manager.get_shortcut('add_scene')
+        )
+        edit_menu.add_command(
+            label="シーンを削除", 
+            command=self.delete_scene,
+            accelerator=self.config_manager.get_shortcut('delete_scene')
+        )
+        menubar.add_cascade(label="編集", menu=edit_menu)
         
         self.root.config(menu=menubar)
     
