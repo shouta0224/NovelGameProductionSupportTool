@@ -4,6 +4,79 @@ import json
 import uuid
 import configparser
 from tkinter import simpledialog
+import importlib
+import inspect
+import os
+from pathlib import Path
+from typing import List, Dict, Type
+
+class IPlugin:
+    """プラグインインターフェース"""
+    def __init__(self, app):
+        self.app = app  # メインアプリケーションへの参照
+    
+    def setup(self):
+        """プラグインの初期化"""
+        pass
+    
+    def register(self):
+        """機能の登録"""
+        pass
+    
+    def teardown(self):
+        """終了処理"""
+        pass
+
+class PluginManager:
+    """プラグインマネージャー"""
+    def __init__(self, app):
+        self.app = app
+        self.plugins: Dict[str, IPlugin] = {}
+        self.plugin_dir = "plugins"
+        
+        # プラグインディレクトリがなければ作成
+        os.makedirs(self.plugin_dir, exist_ok=True)
+    
+    def discover_plugins(self) -> List[str]:
+        """利用可能なプラグインを探索"""
+        plugin_files = Path(self.plugin_dir).glob("*.py")
+        return [f.stem for f in plugin_files if f.is_file() and not f.name.startswith("_")]
+    
+    def load_plugin(self, plugin_name: str) -> bool:
+        """プラグインをロード"""
+        if plugin_name in self.plugins:
+            return False
+        
+        try:
+            module = importlib.import_module(f"{self.plugin_dir}.{plugin_name}")
+            for name, obj in inspect.getmembers(module):
+                if inspect.isclass(obj) and issubclass(obj, IPlugin) and obj != IPlugin:
+                    plugin = obj(self.app)
+                    plugin.setup()
+                    plugin.register()
+                    self.plugins[plugin_name] = plugin
+                    return True
+        except Exception as e:
+            print(f"プラグイン'{plugin_name}'のロードに失敗: {e}")
+        return False
+    
+    def unload_plugin(self, plugin_name: str) -> bool:
+        """プラグインをアンロード"""
+        if plugin_name not in self.plugins:
+            return False
+        
+        try:
+            self.plugins[plugin_name].teardown()
+            del self.plugins[plugin_name]
+            return True
+        except Exception as e:
+            print(f"プラグイン'{plugin_name}'のアンロードに失敗: {e}")
+        return False
+    
+    def reload_plugin(self, plugin_name: str) -> bool:
+        """プラグインを再ロード"""
+        self.unload_plugin(plugin_name)
+        return self.load_plugin(plugin_name)
 
 class ConfigManager:
     def __init__(self):
@@ -140,6 +213,9 @@ class NovelGameEditor:
         self.root = root
         self.root.title("ノベルゲーム制作支援ツール")
         self.root.geometry("1200x800")
+
+        self.plugin_manager = PluginManager(self)
+        self.load_plugins()
         
         self.config_manager = ConfigManager()
         self.current_project = None
@@ -154,6 +230,31 @@ class NovelGameEditor:
         self.scene_name_entry.bind("<FocusOut>", self.on_scene_name_changed)
         self.scene_name_entry.bind("<Return>", self.on_scene_name_changed)
         self.canvas.bind("<Button-3>", self.show_context_menu)
+
+    def add_plugin_menu(self, label: str, command, parent_menu="プラグイン"):
+        """プラグインからメニューを追加"""
+        for item in self.root.winfo_children():
+            if isinstance(item, tk.Menu) and item.title() == parent_menu:
+                item.add_command(label=label, command=command)
+                return
+        
+        # 親メニューが存在しない場合は作成
+        plugin_menu = tk.Menu(self.root, tearoff=0)
+        plugin_menu.add_command(label=label, command=command)
+        self.root.config(menu=self.root["menu"].add_cascade(label=parent_menu, menu=plugin_menu))
+    
+    def add_plugin_toolbar_button(self, text: str, command, image=None):
+        """プラグインからツールバーボタンを追加"""
+        btn = ttk.Button(self.toolbar_frame, text=text, command=command)
+        if image:
+            btn.config(image=image)
+        btn.pack(side=tk.LEFT, padx=2)
+        return btn
+
+    def load_plugins(self):
+        """利用可能なプラグインをロード"""
+        for plugin_name in self.plugin_manager.discover_plugins():
+            self.plugin_manager.load_plugin(plugin_name)
     
     def setup_shortcuts(self):
         # ショートカットキーの設定
@@ -261,6 +362,13 @@ class NovelGameEditor:
             accelerator=self.config_manager.get_shortcut('delete_scene')
         )
         menubar.add_cascade(label="編集", menu=edit_menu)
+
+        # プラグインメニュー
+        if self.plugin_manager.plugins:
+            plugin_menu = tk.Menu(menubar, tearoff=0)
+            for name, plugin in self.plugin_manager.plugins.items():
+                plugin_menu.add_command(label=name)
+            menubar.add_cascade(label="プラグイン", menu=plugin_menu)
         
         self.root.config(menu=menubar)
     
