@@ -225,6 +225,7 @@ class NovelGameEditor:
         
         self.scene_name_entry.bind("<FocusOut>", self.on_scene_name_changed)
         self.scene_name_entry.bind("<Return>", self.on_scene_name_changed)
+        self.scene_content_text.bind("<FocusOut>", self.on_scene_content_changed)
         self.canvas.bind("<Button-3>", self.show_context_menu)
 
     def create_menu(self):
@@ -375,6 +376,12 @@ class NovelGameEditor:
         # 初期状態
         self.update_editor_state()
 
+    def _save_current_scene_content(self):
+        """現在選択中のシーンの内容をオブジェクトに保存する"""
+        if self.selected_scene:
+            self.selected_scene.name = self.scene_name_entry.get().strip()
+            self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
+
             
     def add_plugin_toolbar_button(self, text: str, command, image=None):
         """プラグインからツールバーボタンを追加"""
@@ -459,26 +466,23 @@ class NovelGameEditor:
         SettingsDialog(self.root, self.config_manager)
         # 設定変更後、ショートカットを再設定
         self.setup_shortcuts()
+        # 設定ダイアログを閉じた後、現在のシーンの内容を保存 (FocusOutで保存されるはずだが念のため)
+        self._save_current_scene_content()
 
     def on_scene_content_changed(self, event):
         """シーン内容がフォーカスを失ったときに呼ばれる"""
-        if self.selected_scene:
-            current_content = self.scene_content_text.get("1.0", tk.END).strip()
-            if current_content != self.selected_scene.content:
-                self.selected_scene.content = current_content
+        self._save_current_scene_content() # ここでも保存する
 
     def on_scene_name_changed(self, event):
-        """シーン名または内容が変更された時の処理"""
+        """シーン名が変更された時の処理"""
         if self.selected_scene:
             # シーン名の更新
             new_name = self.scene_name_entry.get().strip()
             if new_name and new_name != self.selected_scene.name:
                 self.selected_scene.name = new_name
             
-            # シーン内容の更新
-            current_content = self.scene_content_text.get("1.0", tk.END).strip()
-            if current_content != self.selected_scene.content:
-                self.selected_scene.content = current_content
+            # 内容も更新 (FocusOutの時と同じ処理)
+            self._save_current_scene_content() 
             
             self.draw_scenes()  # 分岐図を再描画して新しい名前を反映
 
@@ -544,23 +548,17 @@ class NovelGameEditor:
                 messagebox.showerror("エラー", f"プロジェクトの読み込みに失敗しました:\n{str(e)}")
     
     def save_project(self):
-        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる
-        if self.selected_scene:
-            # シーン名も念のため最新のものに更新
-            self.selected_scene.name = self.scene_name_entry.get().strip() 
-            # シーン内容も最新のものに更新
-            self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
-            
+        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる (念のため)
+        self._save_current_scene_content() 
+        
         if self.current_project:
             self.save_to_file(self.current_project)
         else:
             self.save_project_as()
     
     def save_project_as(self):
-        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる
-        if self.selected_scene:
-            self.selected_scene.name = self.scene_name_entry.get().strip()
-            self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
+        # 保存処理の前に、現在のエディタの内容をシーンオブジェクトに反映させる (念のため)
+        self._save_current_scene_content()
             
         file_path = filedialog.asksaveasfilename(
             title="プロジェクトを保存",
@@ -755,27 +753,54 @@ class NovelGameEditor:
                         )
     
     def on_canvas_click(self, event):
-        # シーンノードがクリックされたかチェック
-        clicked_items = self.canvas.find_overlapping(event.x-5, event.y-5, event.x+5, event.y+5)
+        """
+        キャンバス上のクリックイベントを処理します。
+        シーンノードがクリックされた場合はドラッグ開始の準備をし、
+        背景がクリックされた場合はパン操作の準備をします。
+        """
+        # クリックされたアイテムを特定する
+        clicked_items = self.canvas.find_overlapping(event.x - 5, event.y - 5, event.x + 5, event.y + 5)
         
         scene_node_clicked = False
+        clicked_scene_id = None
+        
         for item in clicked_items:
             tags = self.canvas.gettags(item)
             if "scene_node" in tags or "scene_text" in tags:
                 scene_node_clicked = True
-                node_id = tags[0]
-                scene_id = node_id.split("_")[1]
-                self.selected_scene = next((s for s in self.scenes if s.id == scene_id), None)
+                # タグからシーンIDを取得 (例: "scene_xxxxxxxx-xxxx-...")
+                for tag in tags:
+                    if tag.startswith("scene_"):
+                        clicked_scene_id = tag.split("_")[1]
+                        break
                 break
-        
-        if scene_node_clicked:
-            self.drag_data["item"] = self.selected_scene
-            self.drag_data["x"] = event.x
-            self.drag_data["y"] = event.y
-            self.draw_scenes()
-            self.update_editor_state()
+
+        # --- 修正箇所：まずドラッグ開始の準備をし、その後でエディタ状態などを更新する流れにする ---
+
+        if scene_node_clicked and clicked_scene_id:
+            # クリックされたシーンノードに対応するシーンオブジェクトを取得
+            new_selected_scene = next((s for s in self.scenes if s.id == clicked_scene_id), None)
+            
+            if new_selected_scene:
+                # 新しいシーンが選択される前に、前のシーンの内容を保存
+                # (もし既に保存処理が入っていれば、重複しても問題ないはずです)
+                self._save_current_scene_content() 
+                
+                # 新しいシーンを選択状態にし、ドラッグ準備を行う
+                self.selected_scene = new_selected_scene
+                self.drag_data["item"] = self.selected_scene
+                self.drag_data["x"] = event.x
+                self.drag_data["y"] = event.y
+                
+                # UIの状態を更新
+                self.draw_scenes()
+                self.update_editor_state()
+                
         else:
-            # 背景がクリックされた場合、パン操作を開始
+            # シーンノード以外（背景など）がクリックされた場合、パン操作の準備
+            # 背景クリック時も、念のため現在の編集内容を保存しておく
+            self._save_current_scene_content() 
+            
             self.drag_data["item"] = "background"
             self.drag_data["x"] = event.x
             self.drag_data["y"] = event.y
@@ -812,6 +837,9 @@ class NovelGameEditor:
         for item in clicked_items:
             tags = self.canvas.gettags(item)
             if "scene_node" in tags or "scene_text" in tags:
+                # 新しいシーンが選択される前に、前のシーンの内容を保存
+                self._save_current_scene_content() 
+                
                 node_id = tags[0]
                 scene_id = node_id.split("_")[1]
                 self.selected_scene = next((s for s in self.scenes if s.id == scene_id), None)
