@@ -1,5 +1,6 @@
 from tkinter import messagebox
-from .plugin_interface import IPlugin
+# from .plugin_interface import IPlugin
+from plugin_interface import IPlugin
 
 class ExamplePlugin(IPlugin):
     def setup(self):
