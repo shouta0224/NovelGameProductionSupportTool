@@ -16,8 +16,7 @@ import sv_ttk
 
 # --- プラグイン関連 ---
 class IPlugin:
-    def __init__(self, app: 'NovelGameEditor'):
-        self.app = app
+    def __init__(self, app: 'NovelGameEditor'): self.app = app
     def setup(self) -> None: pass
     def register(self) -> None: pass
     def teardown(self) -> None: pass
@@ -33,21 +32,17 @@ class PluginManager:
         return [f.stem for f in self.plugin_dir.glob("*.py") if f.is_file() and not f.name.startswith("_")]
 
     def load_plugin(self, plugin_name: str) -> bool:
-        if plugin_name in self.plugins:
-            return False
+        if plugin_name in self.plugins: return False
         plugin_path = self.plugin_dir / f"{plugin_name}.py"
         if not plugin_path.exists():
             print(f"プラグインファイルが見つかりません: {plugin_path}")
             return False
         try:
             spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
-            if spec is None or spec.loader is None:
-                raise ImportError(f"プラグイン '{plugin_name}' のスペックを作成できませんでした。")
-            
+            if spec is None or spec.loader is None: raise ImportError(f"プラグイン '{plugin_name}' のスペックを作成できませんでした。")
             module = importlib.util.module_from_spec(spec)
             sys.modules[plugin_name] = module
             spec.loader.exec_module(module)
-
             for _, obj in inspect.getmembers(module, inspect.isclass):
                 if issubclass(obj, IPlugin) and obj != IPlugin:
                     plugin_instance = obj(self.app)
@@ -61,13 +56,11 @@ class PluginManager:
         return False
 
     def unload_plugin(self, plugin_name: str) -> bool:
-        if plugin_name not in self.plugins:
-            return False
+        if plugin_name not in self.plugins: return False
         try:
             self.plugins[plugin_name].teardown()
             del self.plugins[plugin_name]
-            if plugin_name in sys.modules:
-                del sys.modules[plugin_name]
+            if plugin_name in sys.modules: del sys.modules[plugin_name]
             print(f"プラグイン '{plugin_name}' をアンロードしました。")
             return True
         except Exception as e:
@@ -82,35 +75,24 @@ class ConfigManager:
         self._load_config()
 
     def _load_config(self) -> None:
-        default_shortcuts = {
-            'new_project': 'Control-n', 'open_project': 'Control-o',
-            'save_project': 'Control-s', 'add_scene': 'Control-a',
-            'delete_scene': 'Control-d'
-        }
-        if not self.config.has_section('SHORTCUTS'):
-            self.config.add_section('SHORTCUTS')
+        default_shortcuts = {'new_project': 'Control-n', 'open_project': 'Control-o', 'save_project': 'Control-s', 'add_scene': 'Control-a', 'delete_scene': 'Control-d'}
+        if not self.config.has_section('SHORTCUTS'): self.config.add_section('SHORTCUTS')
         for key, value in default_shortcuts.items():
-            if not self.config.has_option('SHORTCUTS', key):
-                self.config.set('SHORTCUTS', key, value)
-        if self.config_file.exists():
-            self.config.read(self.config_file, encoding='utf-8')
+            if not self.config.has_option('SHORTCUTS', key): self.config.set('SHORTCUTS', key, value)
+        if self.config_file.exists(): self.config.read(self.config_file, encoding='utf-8')
         self._save_config()
 
     def _save_config(self) -> None:
-        with open(self.config_file, 'w', encoding='utf-8') as f:
-            self.config.write(f)
+        with open(self.config_file, 'w', encoding='utf-8') as f: self.config.write(f)
 
-    def get_shortcut(self, action: str) -> str:
-        return self.config.get('SHORTCUTS', action, fallback='')
+    def get_shortcut(self, action: str) -> str: return self.config.get('SHORTCUTS', action, fallback='')
 
     def set_shortcut(self, action: str, shortcut: str) -> None:
-        if not self.config.has_section('SHORTCUTS'):
-            self.config.add_section('SHORTCUTS')
+        if not self.config.has_section('SHORTCUTS'): self.config.add_section('SHORTCUTS')
         self.config.set('SHORTCUTS', action, shortcut)
         self._save_config()
 
-    def get_shortcut_display(self, action: str) -> str:
-        return self.get_shortcut(action).replace('Control-', 'Ctrl+').title()
+    def get_shortcut_display(self, action: str) -> str: return self.get_shortcut(action).replace('Control-', 'Ctrl+').title()
 
 # --- 設定ダイアログ ---
 class SettingsDialog(tk.Toplevel):
@@ -128,13 +110,8 @@ class SettingsDialog(tk.Toplevel):
     def _create_widgets(self) -> None:
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(main_frame, text="ショートカットキー設定", font="-weight bold").grid(
-            row=0, column=0, columnspan=2, pady=10)
-        shortcut_actions = {
-            'new_project': "新規プロジェクト", 'open_project': "プロジェクトを開く",
-            'save_project': "プロジェクトを保存", 'add_scene': "シーンを追加",
-            'delete_scene': "シーンを削除"
-        }
+        ttk.Label(main_frame, text="ショートカットキー設定", font="-weight bold").grid(row=0, column=0, columnspan=2, pady=10)
+        shortcut_actions = {'new_project': "新規プロジェクト", 'open_project': "プロジェクトを開く", 'save_project': "プロジェクトを保存", 'add_scene': "シーンを追加", 'delete_scene': "シーンを削除"}
         for i, (action_key, action_label) in enumerate(shortcut_actions.items(), 1):
             ttk.Label(main_frame, text=f"{action_label}:").grid(row=i, column=0, sticky=tk.W, padx=5, pady=2)
             entry = ttk.Entry(main_frame, width=30)
@@ -253,7 +230,6 @@ class NovelGameEditor:
     def _create_editor_widgets(self, parent_frame):
         editor_paned = ttk.PanedWindow(parent_frame, orient=tk.VERTICAL)
         editor_paned.pack(fill=tk.BOTH, expand=True)
-
         scene_info_frame = ttk.LabelFrame(editor_paned, text="シーン情報", padding=10)
         scene_info_frame.columnconfigure(1, weight=1)
         scene_info_frame.rowconfigure(1, weight=1)
@@ -267,29 +243,20 @@ class NovelGameEditor:
         self.scene_content_text.grid(row=1, column=1, sticky="nsew", padx=5, pady=2)
         self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
         editor_paned.add(scene_info_frame, weight=2)
-
         branch_frame = ttk.LabelFrame(editor_paned, text="分岐管理", padding=10)
         branch_frame.rowconfigure(0, weight=1)
         branch_frame.columnconfigure(0, weight=1)
         columns = ("text", "target", "condition")
         self.branch_tree = ttk.Treeview(branch_frame, columns=columns, show="headings", height=5)
-        self.branch_tree.heading("text", text="選択肢")
-        self.branch_tree.heading("target", text="遷移先")
-        self.branch_tree.heading("condition", text="条件")
-        self.branch_tree.column("text", width=120, anchor='w')
-        self.branch_tree.column("target", width=100, anchor='w')
-        self.branch_tree.column("condition", width=120, anchor='w')
+        self.branch_tree.heading("text", text="選択肢"); self.branch_tree.heading("target", text="遷移先"); self.branch_tree.heading("condition", text="条件")
+        self.branch_tree.column("text", width=120, anchor='w'); self.branch_tree.column("target", width=100, anchor='w'); self.branch_tree.column("condition", width=120, anchor='w')
         self.branch_tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
         self.branch_tree.bind('<<TreeviewSelect>>', lambda e: self._update_editor_ui_state())
-        
         branch_btn_frame = ttk.Frame(branch_frame)
         branch_btn_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5,0))
-        self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8)
-        self.add_branch_btn.pack(side=tk.LEFT, padx=2)
-        self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8)
-        self.edit_branch_btn.pack(side=tk.LEFT, padx=2)
-        self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8)
-        self.delete_branch_btn.pack(side=tk.LEFT, padx=2)
+        self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8); self.add_branch_btn.pack(side=tk.LEFT, padx=2)
+        self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8); self.edit_branch_btn.pack(side=tk.LEFT, padx=2)
+        self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8); self.delete_branch_btn.pack(side=tk.LEFT, padx=2)
         editor_paned.add(branch_frame, weight=1)
 
     def _bind_events(self):
@@ -308,28 +275,31 @@ class NovelGameEditor:
             scene = self.get_scene_by_id(clicked_node_id)
             if scene:
                 self.drag_state = {
-                    "type": "node", "item_id": clicked_node_id,
-                    "start_x": event.x, "start_y": event.y,
-                    "moved": False, "original_x": scene.x, "original_y": scene.y
+                    "type": "node",
+                    "item_id": clicked_node_id,
+                    "start_x": event.x,
+                    "start_y": event.y,
+                    "last_x": event.x,
+                    "last_y": event.y,
+                    "original_x": scene.x,
+                    "original_y": scene.y,
+                    "moved": False
                 }
         else:
             self.drag_state = { "type": "pan", "start_x": event.x, "start_y": event.y, "moved": False }
 
     def _on_canvas_drag(self, event):
-        if not self.drag_state:
-            return
-        
+        if not self.drag_state: return
         self.drag_state["moved"] = True
         drag_type = self.drag_state.get("type")
 
         if drag_type == "node":
-            scene = self.get_scene_by_id(self.drag_state["item_id"])
-            if scene:
-                dx = event.x - self.drag_state["start_x"]
-                dy = event.y - self.drag_state["start_y"]
-                scene.x = self.drag_state["original_x"] + (dx / self.scale)
-                scene.y = self.drag_state["original_y"] + (dy / self.scale)
-                self._redraw_canvas()
+            item_id = self.drag_state["item_id"]
+            dx = event.x - self.drag_state["last_x"]
+            dy = event.y - self.drag_state["last_y"]
+            self.canvas.move(f"node_{item_id}", dx, dy)
+            self.drag_state["last_x"], self.drag_state["last_y"] = event.x, event.y
+
         elif drag_type == "pan":
             dx = event.x - self.drag_state["start_x"]
             dy = event.y - self.drag_state["start_y"]
@@ -339,18 +309,29 @@ class NovelGameEditor:
             self._redraw_canvas()
 
     def _on_canvas_release(self, event):
-        if not self.drag_state:
-            return
-        
-        if not self.drag_state.get("moved"):
+        if not self.drag_state: return
+
+        if not self.drag_state.get("moved"): # クリック操作
             if self.drag_state.get("type") == "node":
                 scene_to_select = self.get_scene_by_id(self.drag_state["item_id"])
                 self.select_scene(scene_to_select)
             elif self.drag_state.get("type") == "pan":
                 self.select_scene(None)
         
-        if self.drag_state.get("type") == "node" and self.drag_state.get("moved"):
-            self._mark_dirty()
+        elif self.drag_state.get("type") == "node": # ドラッグ終了
+            scene = self.get_scene_by_id(self.drag_state["item_id"])
+            if scene:
+                total_dx_screen = event.x - self.drag_state["start_x"]
+                total_dy_screen = event.y - self.drag_state["start_y"]
+                
+                total_dx_world = total_dx_screen / self.scale
+                total_dy_world = total_dy_screen / self.scale
+                
+                scene.x = self.drag_state["original_x"] + total_dx_world
+                scene.y = self.drag_state["original_y"] + total_dy_world
+                
+                self._mark_dirty()
+                self._redraw_canvas()
 
         self.drag_state = {}
 
@@ -371,20 +352,15 @@ class NovelGameEditor:
         
         context_menu.add_command(label="ここにシーンを追加", command=lambda: self.add_scene(at_screen_pos=(event.x, event.y)))
         context_menu.add_command(label="ビューをリセット", command=self.reset_view)
-        
-        try:
-            context_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            context_menu.grab_release()
+        try: context_menu.tk_popup(event.x_root, event.y_root)
+        finally: context_menu.grab_release()
 
     def _on_canvas_mousewheel(self, event):
         zoom_factor = 1.1 if (event.delta > 0 or event.num == 4) else 1/1.1
         cursor_x_screen, cursor_y_screen = event.x, event.y
         world_x_before, world_y_before = self._screen_to_world(cursor_x_screen, cursor_y_screen)
-        
         self.scale *= zoom_factor
         self.scale = max(0.2, min(3.0, self.scale))
-        
         world_x_after, world_y_after = self._screen_to_world(cursor_x_screen, cursor_y_screen)
         self.view_offset_x += world_x_before - world_x_after
         self.view_offset_y += world_y_before - world_y_after
@@ -394,7 +370,7 @@ class NovelGameEditor:
         items = self.canvas.find_overlapping(x - 1, y - 1, x + 1, y + 1)
         for item in reversed(items):
             tags = self.canvas.gettags(item)
-            if "node" in tags or "node_text" in tags:
+            if "node" in tags:
                 for tag in tags:
                     if tag.startswith("node_"):
                         return tag.split("_")[1]
@@ -405,22 +381,19 @@ class NovelGameEditor:
         self._redraw_canvas()
     
     def select_scene(self, scene: Optional[Scene]):
-        if self.selected_scene == scene:
-            return
+        if self.selected_scene == scene: return
         self._save_current_scene_data()
         self.selected_scene = scene
         self._update_editor_ui_state()
         self._redraw_canvas()
 
     def add_plugin_menu_command(self, label: str, command: callable):
-        if not self.plugin_menu:
-            return
+        if not self.plugin_menu: return
         self.menubar.entryconfig("プラグイン", state="normal")
         self.plugin_menu.add_command(label=label, command=command)
 
     def remove_plugin_menu_command(self, label: str):
-        if not self.plugin_menu:
-            return
+        if not self.plugin_menu: return
         try:
             self.plugin_menu.delete(label)
             if self.plugin_menu.index("end") is None:
@@ -429,26 +402,21 @@ class NovelGameEditor:
             pass
 
     def _on_scene_data_changed(self, event=None):
-        if not self.selected_scene:
-            return
-        
+        if not self.selected_scene: return
         name_changed = self.scene_name_entry.get() != self.selected_scene.name
         content_changed = self.scene_content_text.get("1.0", tk.END).strip() != self.selected_scene.content
-        
         if name_changed or content_changed:
             self._save_current_scene_data()
             self._redraw_canvas()
             self._mark_dirty()
 
     def _save_current_scene_data(self):
-        if not self.selected_scene:
-            return
+        if not self.selected_scene: return
         self.selected_scene.name = self.scene_name_entry.get()
         self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
 
     def _mark_dirty(self, dirty=True):
-        if self.is_dirty == dirty:
-            return
+        if self.is_dirty == dirty: return
         self.is_dirty = dirty
         title = self.root.title()
         if dirty and not title.endswith(" *"):
@@ -479,7 +447,9 @@ class NovelGameEditor:
             sx, sy = self._world_to_screen(scene.x, scene.y)
             radius = self.NODE_RADIUS * self.scale
             is_selected = self.selected_scene and self.selected_scene.id == scene.id
-            tags = ("node", f"node_{scene.id}")
+            
+            common_tag = f"node_{scene.id}"
+            tags = ("node", common_tag)
             if is_selected:
                 tags += ("selected",)
             
@@ -487,27 +457,25 @@ class NovelGameEditor:
             outline_color = "#87CEFA" if is_selected else "#ADB5BD"
             outline_width = 3 * self.scale if is_selected else 1.5 * self.scale
             
+            text_fill = "#FFFF80" if is_selected else "white"
+            font_style = "bold" if is_selected else "normal"
+            font_size = max(8, int(10 * self.scale))
+            font = ("Arial", font_size, font_style)
+            
             self.canvas.create_oval(sx - radius, sy - radius, sx + radius, sy + radius,
                                     fill=fill_color, outline=outline_color, width=outline_width, tags=tags)
-            
-            font_size = max(8, int(10 * self.scale))
-            font = ("Arial", font_size)
-            self.canvas.create_text(sx, sy, text=scene.name, fill="white", font=font, tags=("node_text", f"node_{scene.id}"))
+            self.canvas.create_text(sx, sy, text=scene.name, fill=text_fill, font=font, tags=tags)
     
     def _draw_branches(self):
         scene_map = {s.id: s for s in self.scenes}
         for scene in self.scenes:
             for branch in scene.branches:
                 target_scene = scene_map.get(branch["target"])
-                if not target_scene:
-                    continue
+                if not target_scene: continue
                 
-                start_x, start_y = scene.x, scene.y
-                end_x, end_y = target_scene.x, target_scene.y
-                dx, dy = end_x - start_x, end_y - start_y
-                dist = math.hypot(dx, dy)
-                if dist == 0:
-                    continue
+                start_x, start_y, end_x, end_y = scene.x, scene.y, target_scene.x, target_scene.y
+                dx, dy, dist = end_x - start_x, end_y - start_y, math.hypot(end_x - start_x, end_y - start_y)
+                if dist == 0: continue
 
                 start_offset_x = start_x + (dx / dist) * self.NODE_RADIUS
                 start_offset_y = start_y + (dy / dist) * self.NODE_RADIUS
@@ -520,11 +488,11 @@ class NovelGameEditor:
                 self.canvas.create_line(s_start_x, s_start_y, s_end_x, s_end_y, fill="#999999", width=1.5 * self.scale, arrow=tk.LAST)
                 
                 mid_x, mid_y = (s_start_x + s_end_x) / 2, (s_start_y + s_end_y) / 2
-                font_size = max(7, int(9 * self.scale))
-                font = ("Arial", font_size)
+                font_size, cond_font_size = max(7, int(9 * self.scale)), max(6, int(8 * self.scale))
+                font, cond_font = ("Arial", font_size), ("Arial", cond_font_size, "italic")
+                
                 self.canvas.create_text(mid_x, mid_y - (6 * self.scale), text=branch["text"], fill="#CCCCCC", font=font)
                 if branch["condition"]:
-                    cond_font = ("Arial", max(6, int(8 * self.scale)), "italic")
                     self.canvas.create_text(mid_x, mid_y + (6 * self.scale), text=f"[{branch['condition']}]", fill="#AAAAAA", font=cond_font)
     
     def get_scene_by_id(self, scene_id: str) -> Optional[Scene]:
@@ -532,8 +500,9 @@ class NovelGameEditor:
     
     def _update_editor_ui_state(self):
         is_scene_selected = self.selected_scene is not None
-        self.scene_name_entry.config(state=tk.NORMAL if is_scene_selected else tk.DISABLED)
-        self.scene_content_text.config(state=tk.NORMAL if is_scene_selected else tk.DISABLED)
+        state = tk.NORMAL if is_scene_selected else tk.DISABLED
+        self.scene_name_entry.config(state=state)
+        self.scene_content_text.config(state=state)
         self.scene_name_entry.delete(0, tk.END)
         self.scene_content_text.delete("1.0", tk.END)
 
@@ -541,17 +510,15 @@ class NovelGameEditor:
             self.scene_name_entry.insert(0, self.selected_scene.name)
             self.scene_content_text.insert("1.0", self.selected_scene.content)
         
-        self.add_branch_btn.config(state=tk.NORMAL if is_scene_selected else tk.DISABLED)
-        is_branch_selected = bool(self.branch_tree.selection())
-        self.edit_branch_btn.config(state=tk.NORMAL if is_branch_selected else tk.DISABLED)
-        self.delete_branch_btn.config(state=tk.NORMAL if is_branch_selected else tk.DISABLED)
+        self.add_branch_btn.config(state=state)
+        branch_state = tk.NORMAL if is_scene_selected and self.branch_tree.selection() else tk.DISABLED
+        self.edit_branch_btn.config(state=branch_state)
+        self.delete_branch_btn.config(state=branch_state)
         self._update_branch_list()
     
     def _update_branch_list(self):
         self.branch_tree.delete(*self.branch_tree.get_children())
-        if not self.selected_scene:
-            return
-        
+        if not self.selected_scene: return
         scene_map = {s.id: s.name for s in self.scenes}
         for i, branch in enumerate(self.selected_scene.branches):
             target_name = scene_map.get(branch["target"], "不明なシーン")
@@ -563,27 +530,20 @@ class NovelGameEditor:
         self.status_bar.config(text=status)
     
     def _check_dirty_and_proceed(self) -> bool:
-        if not self.is_dirty:
-            return True
-        
+        if not self.is_dirty: return True
         answer = messagebox.askyesnocancel("確認", "現在のプロジェクトに変更があります。保存しますか？")
         if answer is True:
             self.save_project()
             return not self.is_dirty
-        
         return answer is not None
     
     def _on_closing(self):
-        if self._check_dirty_and_proceed():
-            self.root.destroy()
+        if self._check_dirty_and_proceed(): self.root.destroy()
     
     def new_project(self, startup=False):
-        if not startup and not self._check_dirty_and_proceed():
-            return
-        
+        if not startup and not self._check_dirty_and_proceed(): return
         self.current_project_path = None
-        self.scenes = []
-        self.selected_scene = None
+        self.scenes, self.selected_scene = [], None
         self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0
         self.root.title("ノベルゲーム制作支援ツール - 無題")
         self._mark_dirty(False)
@@ -591,16 +551,11 @@ class NovelGameEditor:
         self._redraw_canvas()
     
     def open_project(self):
-        if not self._check_dirty_and_proceed():
-            return
-        
+        if not self._check_dirty_and_proceed(): return
         path_str = filedialog.askopenfilename(filetypes=[("ノベルプロジェクト", "*.ngp")])
-        if not path_str:
-            return
-        
+        if not path_str: return
         try:
-            with open(Path(path_str), "r", encoding="utf-8") as f:
-                data = json.load(f)
+            with open(Path(path_str), "r", encoding="utf-8") as f: data = json.load(f)
             self.scenes = [Scene.from_dict(d) for d in data.get("scenes", [])]
             self.current_project_path = Path(path_str)
             self.selected_scene = None
@@ -613,16 +568,12 @@ class NovelGameEditor:
             messagebox.showerror("エラー", f"プロジェクトの読み込みに失敗しました:\n{e}")
     
     def save_project(self):
-        if not self.current_project_path:
-            self.save_project_as()
-        else:
-            self._save_to_file(self.current_project_path)
+        if not self.current_project_path: self.save_project_as()
+        else: self._save_to_file(self.current_project_path)
     
     def save_project_as(self):
         path_str = filedialog.asksaveasfilename(defaultextension=".ngp", filetypes=[("ノベルプロジェクト", "*.ngp")])
-        if not path_str:
-            return
-        
+        if not path_str: return
         path = Path(path_str)
         self._save_to_file(path)
         self.current_project_path = path
@@ -643,7 +594,6 @@ class NovelGameEditor:
             wx, wy = self._screen_to_world(at_screen_pos[0], at_screen_pos[1])
         else:
             wx, wy = self._screen_to_world(self.canvas.winfo_width() / 2, self.canvas.winfo_height() / 2)
-        
         new_scene = Scene(name="新しいシーン", x=wx, y=wy)
         self.scenes.append(new_scene)
         self.select_scene(new_scene)
@@ -651,24 +601,18 @@ class NovelGameEditor:
         self._redraw_canvas()
     
     def delete_scene(self):
-        if not self.selected_scene:
-            return
-        if not messagebox.askyesno("確認", f"シーン '{self.selected_scene.name}' を削除しますか？\nこのシーンへの分岐も全て削除されます。"):
-            return
-        
+        if not self.selected_scene: return
+        if not messagebox.askyesno("確認", f"シーン '{self.selected_scene.name}' を削除しますか？\nこのシーンへの分岐も全て削除されます。"): return
         sid = self.selected_scene.id
         self.scenes = [s for s in self.scenes if s.id != sid]
         for scene in self.scenes:
             scene.branches = [b for b in scene.branches if b.get("target") != sid]
-        
         self.select_scene(None)
         self._mark_dirty()
         self._redraw_canvas()
     
     def add_branch(self):
-        if not self.selected_scene:
-            return
-        
+        if not self.selected_scene: return
         dialog = BranchDialog(self.root, "分岐を追加", self.scenes, self.selected_scene)
         if dialog.result:
             self.selected_scene.add_branch(**dialog.result)
@@ -677,19 +621,15 @@ class NovelGameEditor:
             self._redraw_canvas()
     
     def edit_branch(self):
-        if not self.selected_scene or not self.branch_tree.selection():
-            return
-        
+        if not self.selected_scene or not self.branch_tree.selection(): return
         try:
             branch_index = self.branch_tree.index(self.branch_tree.selection()[0])
             branch = self.selected_scene.branches[branch_index]
         except (ValueError, IndexError):
             messagebox.showerror("エラー", "選択された分岐が見つかりません。")
             return
-        
         dialog = BranchDialog(self.root, "分岐を編集", self.scenes, self.selected_scene,
-                              initial_text=branch["text"], initial_target_id=branch["target"],
-                              initial_condition=branch["condition"])
+                              initial_text=branch["text"], initial_target_id=branch["target"], initial_condition=branch["condition"])
         if dialog.result:
             self.selected_scene.branches[branch_index] = dialog.result
             self._mark_dirty()
@@ -697,32 +637,24 @@ class NovelGameEditor:
             self._redraw_canvas()
     
     def delete_branch(self):
-        if not self.selected_scene or not self.branch_tree.selection():
-            return
-        if not messagebox.askyesno("確認", "選択した分岐を削除しますか？"):
-            return
-        
+        if not self.selected_scene or not self.branch_tree.selection(): return
+        if not messagebox.askyesno("確認", "選択した分岐を削除しますか？"): return
         indices_to_delete = sorted([self.branch_tree.index(iid) for iid in self.branch_tree.selection()], reverse=True)
-        for index in indices_to_delete:
-            del self.selected_scene.branches[index]
-        
+        for index in indices_to_delete: del self.selected_scene.branches[index]
         self._mark_dirty()
         self._update_branch_list()
         self._redraw_canvas()
     
-    def _show_settings(self):
-        SettingsDialog(self.root, self.config_manager)
+    def _show_settings(self): SettingsDialog(self.root, self.config_manager)
     
     def setup_shortcuts(self):
         for action, key in self.config_manager.config.items('SHORTCUTS'):
             tk_key = f"<{key.replace('-', '-').title()}>"
             command = getattr(self, action, None)
-            if command:
-                self.root.bind(tk_key, lambda e, cmd=command: cmd())
+            if command: self.root.bind(tk_key, lambda e, cmd=command: cmd())
     
     def _load_plugins(self):
-        for name in self.plugin_manager.discover_plugins():
-            self.plugin_manager.load_plugin(name)
+        for name in self.plugin_manager.discover_plugins(): self.plugin_manager.load_plugin(name)
 
 # --- 分岐設定ダイアログクラス ---
 class BranchDialog(tk.Toplevel):
@@ -741,27 +673,22 @@ class BranchDialog(tk.Toplevel):
         frame = ttk.Frame(self, padding="15")
         frame.pack(fill=tk.BOTH, expand=True)
         frame.columnconfigure(1, weight=1)
-
         ttk.Label(frame, text="選択肢テキスト:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.text_entry = ttk.Entry(frame, width=40)
         self.text_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
         self.text_entry.insert(0, initial_text)
         self.text_entry.focus_set()
-
         ttk.Label(frame, text="遷移先シーン:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
         self.target_var = tk.StringVar()
         self.target_combo = ttk.Combobox(frame, textvariable=self.target_var, values=list(self.target_scenes.keys()), state="readonly")
         self.target_combo.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
         if initial_target_id:
             target_name = next((name for name, id_ in self.target_scenes.items() if id_ == initial_target_id), None)
-            if target_name:
-                self.target_var.set(target_name)
-
+            if target_name: self.target_var.set(target_name)
         ttk.Label(frame, text="条件 (任意):").grid(row=2, column=0, sticky="w", padx=5, pady=5)
         self.condition_entry = ttk.Entry(frame, width=40)
         self.condition_entry.grid(row=2, column=1, sticky="ew", padx=5, pady=5)
         self.condition_entry.insert(0, initial_condition)
-
         btn_frame = ttk.Frame(frame)
         btn_frame.grid(row=3, column=0, columnspan=2, pady=(15, 0))
         ttk.Button(btn_frame, text="OK", command=self._on_ok).pack(side=tk.LEFT, padx=5)
@@ -770,57 +697,27 @@ class BranchDialog(tk.Toplevel):
     def _on_ok(self):
         text = self.text_entry.get().strip()
         target_name = self.target_var.get()
-        if not text:
-            messagebox.showerror("エラー", "選択肢テキストを入力してください。", parent=self)
-            return
-        if not target_name:
-            messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self)
-            return
-        
+        if not text: messagebox.showerror("エラー", "選択肢テキストを入力してください。", parent=self); return
+        if not target_name: messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self); return
         self.result = {"text": text, "target": self.target_scenes[target_name], "condition": self.condition_entry.get().strip()}
         self.destroy()
 
 # --- メイン実行ブロック ---
 if __name__ == "__main__":
-    # アプリケーションと同じディレクトリに "plugins" フォルダを作成し、
-    # その中にプラグインファイル (.py) を置くと自動でロードされます。
-    # 以下はサンプルプラグインです。 "plugins/sample_plugin.py" として保存してください。
-    """
-    from tkinter import messagebox
-    
-    # メインのスクリプト名に依存しないように、モジュールとしてクラスを取得します。
-    # このサンプルでは、メインスクリプトが NovelGameProductionSupportTool.py という名前であることを想定しています。
-    # 実際には、ご自身のファイル名に合わせてください。
-    # もしくは、アプリケーション側でプラグインにクラスを渡す仕組みを設けるのがより堅牢です。
-    from NovelGameProductionSupportTool import IPlugin, NovelGameEditor 
-
-    class SamplePlugin(IPlugin):
-        def __init__(self, app: NovelGameEditor):
-            super().__init__(app)
-            self.menu_label = "シーン数表示"
-
-        def register(self):
-            # プラグインのメニュー項目を追加
-            self.app.add_plugin_menu_command(self.menu_label, self.show_scene_count)
-
-        def show_scene_count(self):
-            # メインアプリケーションのデータにアクセスして機能を実現
-            messagebox.showinfo(
-                "サンプルプラグイン",
-                f"現在のプロジェクトには {len(self.app.scenes)} 個のシーンがあります。"
-            )
-
-        def teardown(self):
-            # アプリケーション終了時やアンロード時にメニュー項目を削除
-            self.app.remove_plugin_menu_command(self.menu_label)
-    """
+    # サンプルプラグイン "plugins/sample_plugin.py" のためのメモ:
+    # `from NovelGameProductionSupportTool import IPlugin, NovelGameEditor` の行は、
+    # メインのPythonファイル名が `NovelGameProductionSupportTool.py` であることを想定しています。
+    # 異なるファイル名で実行する場合は、そのファイル名に合わせて変更してください。
     
     root = tk.Tk()
-    # メインスクリプトの名前をTkinterのクラス名として登録
-    # これにより、プラグインから `from __main__ import ...` のような不安定な方法ではなく、
-    # `from <AppName> import ...` のようにインポートできるようになる可能性がありますが、
-    # 実行方法に依存するため、サンプルプラグインのインポート方法はコメントの通りが確実です。
-    root.tk.eval(f'tk::PlaceWindow . center') # 中央表示
+    # ウィンドウを中央に表示
+    root.update_idletasks()
+    width = root.winfo_width()
+    height = root.winfo_height()
+    x = (root.winfo_screenwidth() // 2) - (width // 2)
+    y = (root.winfo_screenheight() // 2) - (height // 2)
+    root.geometry(f'+{x}+{y}')
+    
     sv_ttk.set_theme("dark")
     app = NovelGameEditor(root)
     root.mainloop()
