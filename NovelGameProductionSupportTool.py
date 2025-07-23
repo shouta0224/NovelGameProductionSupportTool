@@ -25,11 +25,20 @@ class PluginManager:
     def __init__(self, app: 'NovelGameEditor'):
         self.app = app
         self.plugins: Dict[str, IPlugin] = {}
-        
-        try:
-            script_dir = Path(__file__).resolve().parent
-        except NameError:
-            script_dir = Path.cwd()
+
+        # 実行ファイル(.exe)か、通常のスクリプト(.py)かを判定
+        if getattr(sys, 'frozen', False):
+            # 実行ファイルの場合、exe自身の場所を基準にする
+            script_dir = Path(sys.executable).parent
+        else:
+            # スクリプトの場合、__file__の場所を基準にする
+            try:
+                script_dir = Path(__file__).resolve().parent
+            except NameError:
+                script_dir = Path.cwd()
+
+        if str(script_dir) not in sys.path:
+            sys.path.insert(0, str(script_dir))
             
         self.plugin_dir = script_dir / "plugins"
         print(f"[プラグインマネージャ] プラグインディレクトリ: '{self.plugin_dir}'")
@@ -256,13 +265,15 @@ class NovelGameEditor:
         editor_paned.pack(fill=tk.BOTH, expand=True)
         scene_info_frame = ttk.LabelFrame(editor_paned, text="シーン情報", padding=10)
         scene_info_frame.columnconfigure(1, weight=1)
-        scene_info_frame.rowconfigure(1, weight=1)
+        scene_info_frame.rowconfigure(2, weight=1)
         ttk.Label(scene_info_frame, text="シーン名:").grid(row=0, column=0, sticky="w", pady=2)
         self.scene_name_entry = ttk.Entry(scene_info_frame)
         self.scene_name_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
         self.scene_name_entry.bind("<FocusOut>", self._on_scene_data_changed)
         self.scene_name_entry.bind("<Return>", self._on_scene_data_changed)
-        ttk.Label(scene_info_frame, text="内容:").grid(row=1, column=0, sticky="nw", pady=2)
+        self.editor_plugin_frame = ttk.Frame(scene_info_frame)
+        self.editor_plugin_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0), padx=5)
+        ttk.Label(scene_info_frame, text="内容:").grid(row=2, column=0, sticky="nw", pady=2)
         self.scene_content_text = tk.Text(scene_info_frame, height=10, wrap=tk.WORD, relief=tk.FLAT)
         self.scene_content_text.grid(row=1, column=1, sticky="nsew", padx=5, pady=2)
         self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
@@ -791,8 +802,8 @@ if __name__ == "__main__":
     sv_ttk.set_theme("dark")
     
     # メインアプリのモジュール名をプラグインから参照可能にするためのトリック
-    main_module_name = Path(__file__).stem
-    sys.modules[main_module_name] = sys.modules['__main__']
+#    main_module_name = Path(__file__).stem
+#    sys.modules[main_module_name] = sys.modules['__main__']
     
     app = NovelGameEditor(root)
     root.mainloop()
