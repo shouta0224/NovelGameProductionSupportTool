@@ -25,11 +25,29 @@ class PluginManager:
     def __init__(self, app: 'NovelGameEditor'):
         self.app = app
         self.plugins: Dict[str, IPlugin] = {}
-        self.plugin_dir = Path("plugins")
+        
+        try:
+            script_dir = Path(__file__).resolve().parent
+        except NameError:
+            script_dir = Path.cwd()
+            
+        self.plugin_dir = script_dir / "plugins"
+        print(f"[プラグインマネージャ] プラグインディレクトリ: '{self.plugin_dir}'")
         self.plugin_dir.mkdir(exist_ok=True)
 
+
     def discover_plugins(self) -> List[str]:
-        return [f.stem for f in self.plugin_dir.glob("*.py") if f.is_file() and not f.name.startswith("_")]
+        print(f"[プラグインマネージャ] '{self.plugin_dir}' 内のプラグインを探索中...")
+        if not self.plugin_dir.exists():
+            print(f"[プラグインマネージャ] ディレクトリが見つかりません。")
+            return []
+            
+        plugin_files = list(self.plugin_dir.glob("*.py"))
+        print(f"[プラグインマネージャ] 発見したPythonファイル: {[f.name for f in plugin_files]}")
+        
+        found_plugins = [f.stem for f in plugin_files if f.is_file() and not f.name.startswith("_")]
+        print(f"[プラグインマネージャ] ロード対象プラグイン: {found_plugins}")
+        return found_plugins
 
     def load_plugin(self, plugin_name: str) -> bool:
         if plugin_name in self.plugins: return False
@@ -53,6 +71,9 @@ class PluginManager:
                     return True
         except Exception as e:
             print(f"プラグイン '{plugin_name}' のロード中にエラーが発生しました: {e}")
+            # エラーが発生した場合、ロード試行中に登録されたモジュールをクリーンアップ
+            if plugin_name in sys.modules:
+                del sys.modules[plugin_name]
         return False
 
     def unload_plugin(self, plugin_name: str) -> bool:
@@ -654,7 +675,14 @@ class NovelGameEditor:
             if command: self.root.bind(tk_key, lambda e, cmd=command: cmd())
     
     def _load_plugins(self):
-        for name in self.plugin_manager.discover_plugins(): self.plugin_manager.load_plugin(name)
+        print("[メイン] プラグインのロード処理を開始します...")
+        plugin_names = self.plugin_manager.discover_plugins()
+        if not plugin_names:
+            print("[メイン] ロード対象のプラグインはありませんでした。")
+            return
+            
+        for name in plugin_names:
+            self.plugin_manager.load_plugin(name)
 
 # --- 分岐設定ダイアログクラス ---
 class BranchDialog(tk.Toplevel):
@@ -704,20 +732,28 @@ class BranchDialog(tk.Toplevel):
 
 # --- メイン実行ブロック ---
 if __name__ == "__main__":
-    # サンプルプラグイン "plugins/sample_plugin.py" のためのメモ:
-    # `from NovelGameProductionSupportTool import IPlugin, NovelGameEditor` の行は、
-    # メインのPythonファイル名が `NovelGameProductionSupportTool.py` であることを想定しています。
-    # 異なるファイル名で実行する場合は、そのファイル名に合わせて変更してください。
+    # --- プラグイン開発者向けのメモ ---
+    # このファイルの名前は、プラグイン側からインポートされる際に重要になります。
+    # サンプルプラグインを作成する際は、
+    # from NovelGameProductionSupportTool import IPlugin, NovelGameEditor
+    # のように、このファイル名(拡張子なし)を指定してください。
     
     root = tk.Tk()
     # ウィンドウを中央に表示
     root.update_idletasks()
-    width = root.winfo_width()
-    height = root.winfo_height()
-    x = (root.winfo_screenwidth() // 2) - (width // 2)
-    y = (root.winfo_screenheight() // 2) - (height // 2)
-    root.geometry(f'+{x}+{y}')
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    window_width = 1280
+    window_height = 800
+    x = (screen_width // 2) - (window_width // 2)
+    y = (screen_height // 2) - (window_height // 2)
+    root.geometry(f'{window_width}x{window_height}+{x}+{y}')
     
     sv_ttk.set_theme("dark")
+    
+    # メインアプリのモジュール名をプラグインから参照可能にするためのトリック
+    main_module_name = Path(__file__).stem
+    sys.modules[main_module_name] = sys.modules['__main__']
+    
     app = NovelGameEditor(root)
     root.mainloop()
