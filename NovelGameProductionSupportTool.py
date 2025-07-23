@@ -185,9 +185,10 @@ class NovelGameEditor:
         self.root.geometry("1280x800")
         
         self.config_manager = ConfigManager()
-        self.plugin_manager = PluginManager(self)
-        self.project_data: Dict[str, Any] = {"scenes": [], "characters": []}
-        self.scenes: List[Scene] = self.project_data["scenes"]
+        self.pluggable_data_keys: Dict[str, Any] = {} # プラグイン用データキーとデフォルト値を保持
+        self.project_data: Dict[str, Any] = {} # この時点では空
+        self.scenes: List[Scene] = [] # self.project_data['scenes'] への参照として後で設定
+        self.plugin_manager = PluginManager(self) # プラグインマネージャの初期化を先に移動
         self.current_project_path: Optional[Path] = None
         self.scenes: List[Scene] = []
         self.selected_scene: Optional[Scene] = None
@@ -562,13 +563,28 @@ class NovelGameEditor:
     
     def _on_closing(self):
         if self._check_dirty_and_proceed(): self.root.destroy()
+
+    def register_data_key(self, key: str, default_value: Any):
+        """
+        プラグインがプロジェクトデータに新しいキーを登録するためのメソッド。
+        Args:
+            key (str): 保存ファイル内で使用されるキー名 (例: "characters")
+            default_value (Any): 新規プロジェクト作成時や、キーが存在しない古いファイルを開いた際の初期値 (例: [])
+        """
+        if key in self.pluggable_data_keys or key == "scenes":
+            print(f"警告: データキー '{key}' は既に登録済みか、予約されています。")
+            return
+        print(f"[データ] プラグイン用データキー '{key}' をデフォルト値 '{default_value}' で登録しました。")
+        self.pluggable_data_keys[key] = default_value
     
     def new_project(self, startup=False):
         if not startup and not self._check_dirty_and_proceed(): return
         self.current_project_path = None
-        self.project_data = {"scenes": [], "characters": []}
+        self.project_data = {"scenes": []}
+        for key, default in self.pluggable_data_keys.items():
+            self.project_data[key] = default
         self.scenes = self.project_data["scenes"]
-        self.scenes, self.selected_scene = [], None
+        self.selected_scene = None
         self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0
         self.root.title("ノベルゲーム制作支援ツール - 無題")
         self._mark_dirty(False)
@@ -581,13 +597,18 @@ class NovelGameEditor:
         if not path_str: return
         try:
             with open(Path(path_str), "r", encoding="utf-8") as f: data = json.load(f)
+            
+            # シーンデータをロード
             scenes_data = data.get("scenes", [])
-            characters_data = data.get("characters", [])
             self.project_data = {
-                "scenes": [Scene.from_dict(d) for d in scenes_data],
-                "characters": characters_data
+                "scenes": [Scene.from_dict(d) for d in scenes_data]
             }
-            self.scenes = [Scene.from_dict(d) for d in data.get("scenes", [])]
+            # 登録されているプラグインのデータをロード（なければデフォルト値）
+            for key, default in self.pluggable_data_keys.items():
+                self.project_data[key] = data.get(key, default)
+
+            self.scenes = self.project_data["scenes"]
+
             self.current_project_path = Path(path_str)
             self.selected_scene = None
             self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0
@@ -612,15 +633,21 @@ class NovelGameEditor:
     
     def _save_to_file(self, path: Path):
         self._save_current_scene_data()
+        
+        # シーンオブジェクトを辞書に変換
         self.project_data["scenes"] = [s.to_dict() for s in self.scenes]
         data_to_save = self.project_data
-        data = {"scenes": [s.to_dict() for s in self.scenes]}
+
         try:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                json.dump(data_to_save, f, ensure_ascii=False, indent=2)
             self._mark_dirty(False)
         except Exception as e:
             messagebox.showerror("エラー", f"保存に失敗しました:\n{e}")
+        finally:
+            # 保存後、シーンデータをオブジェクトに戻しておく
+            self.scenes = [Scene.from_dict(d) for d in self.project_data.get("scenes", [])]
+            self.project_data["scenes"] = self.scenes
     
     def add_scene(self, at_screen_pos: Optional[Tuple[float, float]] = None):
         if at_screen_pos:
