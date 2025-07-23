@@ -29,18 +29,25 @@ class Tooltip:
 
 class ShortcutEntry(ttk.Entry):
     def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs); self.bind("<KeyPress>", self._on_key_press); self.bind("<FocusOut>", lambda e: self.selection_clear())
+        super().__init__(master, **kwargs); self.bind("<KeyPress>", self._on_key_press); self.bind("<KeyRelease>", self._on_key_release); self.pressed_keys = set()
     def _on_key_press(self, event):
-        if event.keysym not in ('BackSpace', 'Delete'): self.delete(0, tk.END)
-        modifiers = []; key = event.keysym
-        if event.state & 0x4: modifiers.append("Control")
-        if event.state & 0x1: modifiers.append("Shift")
-        if event.keysym in ('Alt_L', 'Alt_R') or (event.state & 0x8 or event.state & 0x80 or event.state & 0x20000):
+        self.delete(0, tk.END)
+        key_name = event.keysym.upper()
+        if key_name in self.pressed_keys: return "break"
+        self.pressed_keys.add(key_name)
+        modifiers = []
+        if event.state & 4: modifiers.append("Control")
+        if event.state & 1: modifiers.append("Shift")
+        if event.keysym in ('Alt_L', 'Alt_R') or (event.state & 8 or event.state & 131072):
             if 'Alt' not in modifiers: modifiers.append("Alt")
-        if key in ('Control_L', 'Control_R', 'Shift_L', 'Shift_R', 'Alt_L', 'Alt_R'): return "break"
-        if key.isalnum() and len(key) == 1: key = key.upper()
-        shortcut_parts = sorted(list(set(modifiers))) + [key]; shortcut_str = "-".join(shortcut_parts)
+        if key_name in ["CONTROL_L", "CONTROL_R", "SHIFT_L", "SHIFT_R", "ALT_L", "ALT_R", "CAPS_LOCK"]: return "break"
+        key_map = {"PLUS": "plus", "MINUS": "minus", "EQUAL": "plus"}; key_name = key_map.get(key_name, key_name)
+        shortcut_parts = sorted(modifiers) + [key_name]; shortcut_str = "-".join(shortcut_parts)
         self.insert(0, shortcut_str); return "break"
+    def _on_key_release(self, event):
+        key_name = event.keysym.upper()
+        if key_name in self.pressed_keys: self.pressed_keys.remove(key_name)
+        return "break"
 
 class TextWithLineNumbers(tk.Frame):
     def __init__(self, master, **kwargs):
@@ -111,7 +118,7 @@ class ConfigManager:
         self.config = configparser.ConfigParser();self.config_file = Path("config.ini");self._load_config()
     def _load_config(self) -> None:
         self.config.read(self.config_file, encoding='utf-8')
-        default_shortcuts = {'new_project': 'Control-N', 'open_project': 'Control-O', 'save_project': 'Control-S','add_scene': 'Control-A', 'add_branch': 'Control-B', 'zoom_in': 'Control-plus','zoom_out': 'Control-minus', 'reset_view': 'Control-0'}
+        default_shortcuts = {'new_project': 'Control-N', 'open_project': 'Control-O', 'save_project': 'Control-S', 'save_project_as': 'Control-Shift-S', 'add_scene': 'Control-A', 'add_branch': 'Control-B', 'zoom_in': 'Control-plus','zoom_out': 'Control-minus', 'reset_view': 'Control-0'}
         if not self.config.has_section('SHORTCUTS'): self.config.add_section('SHORTCUTS')
         for key, value in default_shortcuts.items():
             if not self.config.has_option('SHORTCUTS', key): self.config.set('SHORTCUTS', key, value)
@@ -155,7 +162,7 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(parent);self.title("設定");self.config_manager = config_manager;self.transient(parent);self.grab_set();self.shortcut_entry_widgets = {};self._create_widgets();self.resizable(False, False);self.wait_window(self)
     def _create_widgets(self) -> None:
         main_frame = ttk.Frame(self, padding="10");main_frame.pack(fill=tk.BOTH, expand=True);ttk.Label(main_frame, text="ショートカットキー設定", font="-weight bold").grid(row=0, column=0, columnspan=2, pady=10)
-        shortcut_actions = {'new_project': "新規プロジェクト", 'open_project': "プロジェクトを開く", 'save_project': "プロジェクトを保存", 'add_scene': "シーンを追加", 'add_branch': "分岐を追加", 'zoom_in': "ズームイン", 'zoom_out': "ズームアウト", 'reset_view': "ビューをリセット"}
+        shortcut_actions = {'new_project': "新規プロジェクト", 'open_project': "プロジェクトを開く", 'save_project': "プロジェクトを保存", 'save_project_as': "名前を付けて保存", 'add_scene': "シーンを追加", 'add_branch': "分岐を追加", 'zoom_in': "ズームイン", 'zoom_out': "ズームアウト", 'reset_view': "ビューをリセット"}
         for i, (action_key, action_label) in enumerate(shortcut_actions.items(), 1):
             ttk.Label(main_frame, text=f"{action_label}:").grid(row=i, column=0, sticky=tk.W, padx=5, pady=2);entry = ShortcutEntry(main_frame, width=30);entry.grid(row=i, column=1, padx=5, pady=2);entry.insert(0, self.config_manager.get_shortcut(action_key));self.shortcut_entry_widgets[action_key] = entry
         button_frame = ttk.Frame(main_frame);button_frame.grid(row=len(shortcut_actions) + 1, column=0, columnspan=2, pady=15);ttk.Button(button_frame, text="保存", command=self._save_settings).pack(side=tk.LEFT, padx=5);ttk.Button(button_frame, text="キャンセル", command=self.destroy).pack(side=tk.LEFT, padx=5)
@@ -207,6 +214,12 @@ class BranchDialog(tk.Toplevel):
         btn_frame = ttk.Frame(frame);btn_frame.grid(row=3, column=0, columnspan=3, pady=(15, 0));ttk.Button(btn_frame, text="OK", command=self._on_ok).pack(side=tk.LEFT, padx=5);ttk.Button(btn_frame, text="キャンセル", command=self.destroy).pack(side=tk.LEFT, padx=5)
     def _select_scene(self):
         available_scenes = [s for s in self.all_scenes if s.id != self.source_scene.id]
+        if not available_scenes:
+            if messagebox.askyesno("確認", "遷移可能なシーンがありません。\n新しいシーンを作成して遷移先にしますか？", parent=self):
+                if hasattr(self.master, 'app'):
+                    new_scene = self.master.app.add_scene(return_scene=True)
+                    if new_scene: self.target_id = new_scene.id; self.target_scene_var.set(new_scene.name)
+            return
         dialog = SceneSelectionDialog(self, available_scenes)
         if dialog.result:
             self.target_id = dialog.result
@@ -235,11 +248,37 @@ class NovelGameEditor:
         editor_frame = ttk.Frame(main_paned);self._create_editor_widgets(editor_frame);main_paned.add(editor_frame, weight=1)
         self.status_bar = ttk.Label(self.root, text="準備完了", anchor=tk.W, padding=(5, 2));self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
     def _create_menu(self):
-        file_menu = tk.Menu(self.menubar, tearoff=0);file_menu.add_command(label="新規", command=self.new_project, accelerator=self.config_manager.get_shortcut_display('new_project'));file_menu.add_command(label="開く...", command=self.open_project, accelerator=self.config_manager.get_shortcut_display('open_project'))
-        self.recent_files_menu = tk.Menu(file_menu, tearoff=0);file_menu.add_cascade(label="最近使ったプロジェクトを開く", menu=self.recent_files_menu);self._update_recent_files_menu()
-        file_menu.add_command(label="保存", command=self.save_project, accelerator=self.config_manager.get_shortcut_display('save_project'));file_menu.add_command(label="名前を付けて保存...", command=self.save_project_as);file_menu.add_separator();file_menu.add_command(label="設定...", command=self._show_settings);file_menu.add_separator();theme_menu = tk.Menu(file_menu, tearoff=0);theme_menu.add_command(label="ダークテーマ", command=lambda: self.set_theme("dark"));theme_menu.add_command(label="ライトテーマ", command=lambda: self.set_theme("light"));file_menu.add_cascade(label="テーマ", menu=theme_menu);file_menu.add_separator();file_menu.add_command(label="終了", command=self._on_closing);self.menubar.add_cascade(label="ファイル", menu=file_menu)
-        edit_menu = tk.Menu(self.menubar, tearoff=0);edit_menu.add_command(label="シーンを追加", command=self.add_scene, accelerator=self.config_manager.get_shortcut_display('add_scene'));edit_menu.add_command(label="選択中のシーンを削除", command=self.delete_scene, accelerator="Delete");self.menubar.add_cascade(label="編集", menu=edit_menu)
-        self.plugin_menu = tk.Menu(self.menubar, tearoff=0);self.menubar.add_cascade(label="プラグイン", menu=self.plugin_menu, state="disabled")
+        self.menubar.delete(0, tk.END)
+        self.file_menu = tk.Menu(self.menubar, tearoff=0)
+        self.file_menu.add_command(label="新規", command=self.new_project)
+        self.file_menu.add_command(label="開く...", command=self.open_project)
+        self.recent_files_menu = tk.Menu(self.file_menu, tearoff=0)
+        self.file_menu.add_cascade(label="最近使ったプロジェクトを開く", menu=self.recent_files_menu)
+        self.file_menu.add_command(label="保存", command=self.save_project)
+        self.file_menu.add_command(label="名前を付けて保存...", command=self.save_project_as)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="設定...", command=self._show_settings)
+        self.file_menu.add_separator()
+        theme_menu = tk.Menu(self.file_menu, tearoff=0)
+        theme_menu.add_command(label="ダークテーマ", command=lambda: self.set_theme("dark"))
+        theme_menu.add_command(label="ライトテーマ", command=lambda: self.set_theme("light"))
+        self.file_menu.add_cascade(label="テーマ", menu=theme_menu)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="終了", command=self._on_closing)
+        self.menubar.add_cascade(label="ファイル", menu=self.file_menu)
+        self.edit_menu = tk.Menu(self.menubar, tearoff=0)
+        self.edit_menu.add_command(label="シーンを追加", command=self.add_scene)
+        self.edit_menu.add_command(label="選択中のシーンを削除", command=self.delete_scene, accelerator="Delete")
+        self.menubar.add_cascade(label="編集", menu=self.edit_menu)
+        self.plugin_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="プラグイン", menu=self.plugin_menu, state="disabled")
+        self._update_recent_files_menu()
+    def _update_menu_accelerators(self):
+        self.file_menu.entryconfig("新規", accelerator=self.config_manager.get_shortcut_display('new_project'))
+        self.file_menu.entryconfig("開く...", accelerator=self.config_manager.get_shortcut_display('open_project'))
+        self.file_menu.entryconfig("保存", accelerator=self.config_manager.get_shortcut_display('save_project'))
+        self.file_menu.entryconfig("名前を付けて保存...", accelerator=self.config_manager.get_shortcut_display('save_project_as'))
+        self.edit_menu.entryconfig("シーンを追加", accelerator=self.config_manager.get_shortcut_display('add_scene'))
     def _create_editor_widgets(self, parent_frame):
         editor_paned = ttk.PanedWindow(parent_frame, orient=tk.VERTICAL);editor_paned.pack(fill=tk.BOTH, expand=True)
         scene_info_frame = ttk.LabelFrame(editor_paned, text="シーン情報", padding=10);scene_info_frame.columnconfigure(1, weight=1);scene_info_frame.rowconfigure(2, weight=1)
@@ -262,49 +301,50 @@ class NovelGameEditor:
         if key in self.pluggable_data_keys or key == "scenes": print(f"警告: データキー '{key}' は既に登録済みか、予約されています。"); return
         print(f"[データ] プラグイン用データキー '{key}' をデフォルト値 '{default_value}' で登録しました。"); self.pluggable_data_keys[key] = default_value
     def _on_canvas_press(self, event):
-        self.canvas.focus_set(); clicked_node_id = self._get_node_id_at(event.x, event.y)
+        self.canvas.focus_set(); self.canvas.scan_mark(event.x, event.y)
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y); clicked_node_id = self._get_node_id_at(cx, cy)
         if clicked_node_id:
             scene = self.get_scene_by_id(clicked_node_id)
-            if scene: self.drag_state = {"type": "node", "item_id": clicked_node_id, "start_x": event.x, "start_y": event.y, "last_x": event.x, "last_y": event.y, "original_x": scene.x, "original_y": scene.y, "moved": False}
+            if scene: self.drag_state = {"type": "node", "item_id": clicked_node_id, "start_x": cx, "start_y": cy, "last_x": cx, "last_y": cy, "original_x": scene.x, "original_y": scene.y, "moved": False}
         else: self.drag_state = { "type": "pan", "start_x": event.x, "start_y": event.y, "moved": False }
     def _on_canvas_drag(self, event):
         if not self.drag_state: return
         self.drag_state["moved"] = True; drag_type = self.drag_state.get("type")
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         if drag_type == "node":
-            item_id = self.drag_state["item_id"]; dx = event.x - self.drag_state["last_x"]; dy = event.y - self.drag_state["last_y"]
-            self.canvas.move(f"node_{item_id}", dx, dy); self.drag_state["last_x"], self.drag_state["last_y"] = event.x, event.y
+            dx = cx - self.drag_state["last_x"]; dy = cy - self.drag_state["last_y"]
+            self.canvas.move(f"node_{self.drag_state['item_id']}", dx, dy); self.drag_state["last_x"], self.drag_state["last_y"] = cx, cy
         elif drag_type == "pan":
-            dx = event.x - self.drag_state["start_x"]; dy = event.y - self.drag_state["start_y"]
-            self.view_offset_x += dx / self.scale; self.view_offset_y += dy / self.scale
-            self.drag_state["start_x"], self.drag_state["start_y"] = event.x, event.y; self._redraw_canvas()
+            self.canvas.scan_dragto(event.x, event.y, gain=1)
     def _on_canvas_release(self, event):
         if not self.drag_state: return
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         if not self.drag_state.get("moved"):
             if self.drag_state.get("type") == "node": self.select_scene(self.get_scene_by_id(self.drag_state["item_id"]))
             elif self.drag_state.get("type") == "pan": self.select_scene(None)
         elif self.drag_state.get("type") == "node":
             scene = self.get_scene_by_id(self.drag_state["item_id"])
             if scene:
-                total_dx_screen = event.x - self.drag_state["start_x"]; total_dy_screen = event.y - self.drag_state["start_y"]
-                scene.x = self.drag_state["original_x"] + (total_dx_screen / self.scale); scene.y = self.drag_state["original_y"] + (total_dy_screen / self.scale)
+                total_dx_canvas = cx - self.drag_state["start_x"]; total_dy_canvas = cy - self.drag_state["start_y"]
+                scene.x = self.drag_state["original_x"] + (total_dx_canvas / self.scale); scene.y = self.drag_state["original_y"] + (total_dy_canvas / self.scale)
                 self._mark_dirty(); self._redraw_canvas()
         self.drag_state = {}
     def _on_canvas_double_click(self, event):
         if self.selected_scene: self.scene_name_entry.focus_set(); self.scene_name_entry.selection_range(0, tk.END)
     def _on_canvas_right_click(self, event):
-        context_menu = tk.Menu(self.root, tearoff=0); clicked_node_id = self._get_node_id_at(event.x, event.y)
+        context_menu = tk.Menu(self.root, tearoff=0); cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y); clicked_node_id = self._get_node_id_at(cx, cy)
         if clicked_node_id:
             scene = self.get_scene_by_id(clicked_node_id)
             if scene and scene != self.selected_scene: self.select_scene(scene)
             context_menu.add_command(label=f"シーン '{scene.name}' を削除", command=self.delete_scene); context_menu.add_separator()
-        context_menu.add_command(label="ここにシーンを追加", command=lambda: self.add_scene(at_screen_pos=(event.x, event.y))); context_menu.add_command(label="ビューをリセット", command=self.reset_view)
+        context_menu.add_command(label="ここにシーンを追加", command=lambda: self.add_scene(at_canvas_pos=(cx, cy))); context_menu.add_command(label="ビューをリセット", command=self.reset_view)
         try: context_menu.tk_popup(event.x_root, event.y_root)
         finally: context_menu.grab_release()
     def _on_canvas_mousewheel(self, event, is_zoom=False):
         if event.state & 0x4 or is_zoom: self._zoom(1.1 if (event.delta > 0 or event.num == 4) else 1/1.1, event.x, event.y)
         else: self.canvas.yview_scroll(-1 * (1 if event.delta > 0 else -1), "units")
-    def _get_node_id_at(self, x: int, y: int) -> Optional[str]:
-        items = self.canvas.find_overlapping(x - 1, y - 1, x + 1, y + 1)
+    def _get_node_id_at(self, x: float, y: float) -> Optional[str]:
+        items = self.canvas.find_overlapping(x - 2, y - 2, x + 2, y + 2)
         for item in reversed(items):
             tags = self.canvas.gettags(item)
             if "node" in tags:
@@ -326,7 +366,7 @@ class NovelGameEditor:
     def _on_scene_data_changed(self, event=None):
         if not self.selected_scene: return
         name_changed = self.scene_name_entry.get() != self.selected_scene.name; content_changed = self.scene_content_text.get("1.0", tk.END).strip() != self.selected_scene.content
-        if name_changed or content_changed: self._save_current_scene_data(); self._redraw_canvas(); self._mark_dirty()
+        if name_changed or content_changed: self._save_current_scene_data(); self._update_editor_ui_state(); self._redraw_canvas(); self._mark_dirty()
     def _save_current_scene_data(self):
         if not self.selected_scene: return
         self.selected_scene.name = self.scene_name_entry.get(); self.selected_scene.content = self.scene_content_text.get("1.0", tk.END).strip()
@@ -367,8 +407,7 @@ class NovelGameEditor:
         is_scene_selected = self.selected_scene is not None; state = tk.NORMAL if is_scene_selected else tk.DISABLED
         self.scene_name_entry.config(state=state); self.scene_content_text.text.config(state=state)
         self.scene_name_entry.delete(0, tk.END); self.scene_content_text.delete("1.0", tk.END)
-        if is_scene_selected:
-            self.scene_name_entry.insert(0, self.selected_scene.name); self.scene_content_text.insert("1.0", self.selected_scene.content)
+        if is_scene_selected: self.scene_name_entry.insert(0, self.selected_scene.name); self.scene_content_text.insert("1.0", self.selected_scene.content)
         self.add_branch_btn.config(state=state); self._update_branch_list(); self._update_text_info()
     def _update_branch_list(self):
         self.branch_tree.delete(*self.branch_tree.get_children())
@@ -382,53 +421,51 @@ class NovelGameEditor:
         state = tk.NORMAL if self.selected_scene and is_branch_selected else tk.DISABLED
         self.edit_branch_btn.config(state=state); self.delete_branch_btn.config(state=state)
     def _update_status_bar(self, message: Optional[str] = None):
-        if message:
-            self.status_bar.config(text=message)
-            self.root.after(3000, self._update_status_bar)
-            return
-        status = f"選択中: {self.selected_scene.name}" if self.selected_scene else "シーン未選択"; status += f" | シーン数: {len(self.scenes)} | ズーム: {self.scale:.2f}"; self.status_bar.config(text=status)
+        if message: self.status_bar.config(text=message); self.root.after(3000, lambda: self._update_status_bar())
+        else: status = f"選択中: {self.selected_scene.name}" if self.selected_scene else "シーン未選択"; status += f" | シーン数: {len(self.scenes)} | ズーム: {self.scale:.2f}"; self.status_bar.config(text=status)
     def _update_text_info(self, event=None):
-        content = self.scene_content_text.get("1.0", "end-1c")
-        char_count = len(content); line_count = content.count("\n") + 1 if content else 0
-        self.text_info_label.config(text=f"文字数: {char_count} | 行数: {line_count}")
-        self.scene_content_text.text.edit_modified(False)
+        content = self.scene_content_text.get("1.0", "end-1c"); char_count = len(content); line_count = content.count("\n") + 1 if content else 0
+        self.text_info_label.config(text=f"文字数: {char_count} | 行数: {line_count}"); self.scene_content_text.text.edit_modified(False)
     def _check_dirty_and_proceed(self) -> bool:
         if not self.is_dirty: return True
         answer = messagebox.askyesnocancel("確認", "現在のプロジェクトに変更があります。保存しますか？");
-        if answer is True: self.save_project(); return not self.is_dirty
-        return answer is not None
+        if answer is True: return self.save_project()
+        return answer
     def _on_closing(self):
         if self._check_dirty_and_proceed(): self.root.destroy()
-    def new_project(self, startup=False):
+    def new_project(self, event=None, startup=False):
         if not startup and not self._check_dirty_and_proceed(): return
         self.current_project_path = None; self.project_data = {"scenes": []}
         for key, default in self.pluggable_data_keys.items(): self.project_data[key] = default
         self.scenes = self.project_data["scenes"]; self.selected_scene = None; self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0; self.root.title("ノベルゲーム制作支援ツール - 無題"); self._mark_dirty(False); self._update_editor_ui_state(); self._redraw_canvas()
-    def open_project(self, path_to_open: Optional[Path] = None):
+    def open_project(self, event=None, path_to_open: Optional[Path] = None):
         if not self._check_dirty_and_proceed(): return
         path_str = str(path_to_open) if path_to_open else filedialog.askopenfilename(filetypes=[("ノベルプロジェクト", "*.ngp")])
         if not path_str: return
         try:
             path = Path(path_str)
             with open(path, "r", encoding="utf-8") as f: data = json.load(f)
-            scenes_data = data.get("scenes", []); self.project_data = {"scenes": [Scene.from_dict(d) for d in scenes_data]}
+            scenes_data = data.get("scenes", [])
+            if not isinstance(scenes_data, list): raise ValueError("scenesデータがリスト形式ではありません。")
+            self.project_data = {"scenes": [Scene.from_dict(d) for d in scenes_data]}
             for key, default in self.pluggable_data_keys.items(): self.project_data[key] = data.get(key, default)
             self.scenes = self.project_data["scenes"]; self.current_project_path = path; self.selected_scene = None; self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0; self.root.title(f"ノベルゲーム制作支援ツール - {self.current_project_path.name}"); self._mark_dirty(False); self._update_editor_ui_state(); self._redraw_canvas()
             self.config_manager.add_recent_file(path); self._update_recent_files_menu(); self._update_status_bar(f"プロジェクト '{path.name}' を開きました。")
         except Exception as e: messagebox.showerror("エラー", f"プロジェクトの読み込みに失敗しました:\n{e}")
-    def save_project(self, event=None):
-        if not self.current_project_path: self.save_project_as()
-        else: self._save_to_file(self.current_project_path)
-    def save_project_as(self):
+    def save_project(self, event=None) -> bool:
+        if not self.current_project_path: return self.save_project_as()
+        else: return self._save_to_file(self.current_project_path)
+    def save_project_as(self, event=None) -> bool:
         path_str = filedialog.asksaveasfilename(defaultextension=".ngp", filetypes=[("ノベルプロジェクト", "*.ngp")])
-        if not path_str: return
-        path = Path(path_str); self._save_to_file(path); self.current_project_path = path; self.root.title(f"ノベルゲーム制作支援ツール - {path.name}")
-    def _save_to_file(self, path: Path):
+        if not path_str: return False
+        path = Path(path_str); self.current_project_path = path; self.root.title(f"ノベルゲーム制作支援ツール - {path.name}"); return self._save_to_file(path)
+    def _save_to_file(self, path: Path) -> bool:
         self._save_current_scene_data(); self.project_data["scenes"] = [s.to_dict() for s in self.scenes]; data_to_save = self.project_data
         try:
             with open(path, "w", encoding="utf-8") as f: json.dump(data_to_save, f, ensure_ascii=False, indent=2)
             self._mark_dirty(False); self.config_manager.add_recent_file(path); self._update_recent_files_menu(); self._update_status_bar(f"プロジェクトを '{path.name}' に保存しました。")
-        except Exception as e: messagebox.showerror("エラー", f"保存に失敗しました:\n{e}")
+            return True
+        except Exception as e: messagebox.showerror("エラー", f"保存に失敗しました:\n{e}"); return False
         finally:
             self.scenes = [Scene.from_dict(d) for d in self.project_data.get("scenes", [])]; self.project_data["scenes"] = self.scenes
     def _update_recent_files_menu(self):
@@ -437,11 +474,15 @@ class NovelGameEditor:
         recent_files = self.config_manager.get_recent_files()
         if not recent_files: self.recent_files_menu.add_command(label="（履歴なし）", state="disabled"); return
         for i, path in enumerate(recent_files):
-            self.recent_files_menu.add_command(label=f"{i+1}. {path.name}", command=lambda p=path: self.open_project(p))
-    def add_scene(self, event=None, at_screen_pos: Optional[Tuple[float, float]] = None):
-        if at_screen_pos: wx, wy = self._screen_to_world(at_screen_pos[0], at_screen_pos[1])
+            path_text = str(path);
+            if len(path_text) > 60: path_text = path_text[:25] + "..." + path_text[-30:]
+            self.recent_files_menu.add_command(label=f"{i+1}. {path_text}", command=lambda p=path: self.open_project(path_to_open=p))
+    def add_scene(self, event=None, at_screen_pos: Optional[Tuple[float, float]] = None, return_scene=False, at_canvas_pos=None):
+        if at_canvas_pos: wx, wy = at_canvas_pos
+        elif at_screen_pos: wx, wy = self._screen_to_world(at_screen_pos[0], at_screen_pos[1])
         else: wx, wy = self._screen_to_world(self.canvas.winfo_width() / 2, self.canvas.winfo_height() / 2)
         new_scene = Scene(name="新しいシーン", x=wx, y=wy); self.scenes.append(new_scene); self.select_scene(new_scene); self._mark_dirty(); self._redraw_canvas()
+        if return_scene: return new_scene
     def delete_scene(self, event=None):
         if not self.selected_scene: return
         if not messagebox.askyesno("確認", f"シーン '{self.selected_scene.name}' を削除しますか？\nこのシーンへの分岐も全て削除されます。"): return
@@ -479,14 +520,18 @@ class NovelGameEditor:
     def zoom_out(self, event=None): self._zoom(1/1.2)
     def reset_view(self, event=None): self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0; self._redraw_canvas()
     def setup_shortcuts(self):
-        for child in self.root.winfo_children(): child.unbind_all("<Key>")
         self.root.unbind_all("<Key>")
-        bindings = {'new_project': self.new_project, 'open_project': self.open_project, 'save_project': self.save_project, 'add_scene': self.add_scene, 'add_branch': self.add_branch, 'zoom_in': self.zoom_in, 'zoom_out': self.zoom_out, 'reset_view': self.reset_view}
+        bindings = {'new_project': self.new_project, 'open_project': self.open_project, 'save_project': self.save_project, 'save_project_as': self.save_project_as, 'add_scene': self.add_scene, 'add_branch': self.add_branch, 'zoom_in': self.zoom_in, 'zoom_out': self.zoom_out, 'reset_view': self.reset_view}
         for action, command in bindings.items():
             shortcut = self.config_manager.get_shortcut(action)
-            if shortcut:
-                tk_key = f"<{shortcut.replace('-', '-').replace('Control-+', 'Control-plus')}>"
-                self.root.bind(tk_key, lambda e, cmd=command: cmd(event=e))
+            if not shortcut: continue
+            parts = shortcut.replace('+', '-').split('-')
+            modifiers = sorted([p.capitalize() for p in parts[:-1] if p.lower() in ('control', 'alt', 'shift')])
+            key = parts[-1].lower()
+            if not key: continue
+            tk_key = f"<{'-'.join(modifiers)}-{key}>"
+            self.root.bind(tk_key, lambda e, cmd=command: cmd())
+        self._update_menu_accelerators()
     def _load_plugins(self):
         print("[メイン] プラグインのロード処理を開始します..."); plugin_names = self.plugin_manager.discover_plugins()
         if not plugin_names: print("[メイン] ロード対象のプラグインはありませんでした。"); return
