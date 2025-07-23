@@ -186,6 +186,8 @@ class NovelGameEditor:
         
         self.config_manager = ConfigManager()
         self.plugin_manager = PluginManager(self)
+        self.project_data: Dict[str, Any] = {"scenes": [], "characters": []}
+        self.scenes: List[Scene] = self.project_data["scenes"]
         self.current_project_path: Optional[Path] = None
         self.scenes: List[Scene] = []
         self.selected_scene: Optional[Scene] = None
@@ -564,6 +566,8 @@ class NovelGameEditor:
     def new_project(self, startup=False):
         if not startup and not self._check_dirty_and_proceed(): return
         self.current_project_path = None
+        self.project_data = {"scenes": [], "characters": []}
+        self.scenes = self.project_data["scenes"]
         self.scenes, self.selected_scene = [], None
         self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, 1.0
         self.root.title("ノベルゲーム制作支援ツール - 無題")
@@ -577,6 +581,12 @@ class NovelGameEditor:
         if not path_str: return
         try:
             with open(Path(path_str), "r", encoding="utf-8") as f: data = json.load(f)
+            scenes_data = data.get("scenes", [])
+            characters_data = data.get("characters", [])
+            self.project_data = {
+                "scenes": [Scene.from_dict(d) for d in scenes_data],
+                "characters": characters_data
+            }
             self.scenes = [Scene.from_dict(d) for d in data.get("scenes", [])]
             self.current_project_path = Path(path_str)
             self.selected_scene = None
@@ -602,6 +612,8 @@ class NovelGameEditor:
     
     def _save_to_file(self, path: Path):
         self._save_current_scene_data()
+        self.project_data["scenes"] = [s.to_dict() for s in self.scenes]
+        data_to_save = self.project_data
         data = {"scenes": [s.to_dict() for s in self.scenes]}
         try:
             with open(path, "w", encoding="utf-8") as f:
