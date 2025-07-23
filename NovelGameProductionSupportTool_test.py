@@ -67,7 +67,13 @@ class PluginManager:
         try:
             spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
             if spec is None or spec.loader is None: raise ImportError(f"プラグイン '{plugin_name}' のスペックを作成できませんでした。")
+            
             module = importlib.util.module_from_spec(spec)
+            
+            # プラグインが必要とするクラスをモジュールに注入する
+            # これにより、プラグイン側でのimportが不要になる
+            module.IPlugin = IPlugin
+            module.NovelGameEditor = NovelGameEditor
             sys.modules[plugin_name] = module
             spec.loader.exec_module(module)
             for _, obj in inspect.getmembers(module, inspect.isclass):
@@ -275,7 +281,7 @@ class NovelGameEditor:
         self.editor_plugin_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0), padx=5)
         ttk.Label(scene_info_frame, text="内容:").grid(row=2, column=0, sticky="nw", pady=2)
         self.scene_content_text = tk.Text(scene_info_frame, height=10, wrap=tk.WORD, relief=tk.FLAT)
-        self.scene_content_text.grid(row=2, column=1, sticky="nsew", padx=5, pady=2)
+        self.scene_content_text.grid(row=1, column=1, sticky="nsew", padx=5, pady=2)
         self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
         editor_paned.add(scene_info_frame, weight=2)
         branch_frame = ttk.LabelFrame(editor_paned, text="分岐管理", padding=10)
@@ -609,10 +615,15 @@ class NovelGameEditor:
         try:
             with open(Path(path_str), "r", encoding="utf-8") as f: data = json.load(f)
             
+            # シーンデータをロード
             scenes_data = data.get("scenes", [])
-            self.project_data = {"scenes": [Scene.from_dict(d) for d in scenes_data]}
+            self.project_data = {
+                "scenes": [Scene.from_dict(d) for d in scenes_data]
+            }
+            # 登録されているプラグインのデータをロード（なければデフォルト値）
             for key, default in self.pluggable_data_keys.items():
                 self.project_data[key] = data.get(key, default)
+
             self.scenes = self.project_data["scenes"]
 
             self.current_project_path = Path(path_str)
@@ -651,7 +662,7 @@ class NovelGameEditor:
         except Exception as e:
             messagebox.showerror("エラー", f"保存に失敗しました:\n{e}")
         finally:
-            # シーンデータをオブジェクトに戻しておく (json.dumpで辞書に変換されたため)
+            # 保存後、シーンデータをオブジェクトに戻しておく
             self.scenes = [Scene.from_dict(d) for d in self.project_data.get("scenes", [])]
             self.project_data["scenes"] = self.scenes
     
@@ -777,14 +788,14 @@ class BranchDialog(tk.Toplevel):
 
 # --- メイン実行ブロック ---
 if __name__ == "__main__":
-    # プラグインがメインアプリケーションのクラスをインポートできるようにする特別な処理
-    # プラグインは `from main_app_module import IPlugin, NovelGameEditor` のように記述する
-    # ここでいう `main_app_module` は、このスクリプトのファイル名 (例: NovelGameProductionSupportTool)
-    APP_MODULE_NAME = Path(__file__).stem
-    # sys.modules に自身を登録することで、プラグインがその名前でインポートできるようになる
-    sys.modules[APP_MODULE_NAME] = sys.modules['__main__']
+    # --- プラグイン開発者向けのメモ ---
+    # このファイルの名前は、プラグイン側からインポートされる際に重要になります。
+    # サンプルプラグインを作成する際は、
+    # from NovelGameProductionSupportTool import IPlugin, NovelGameEditor
+    # のように、このファイル名(拡張子なし)を指定してください。
     
     root = tk.Tk()
+    # ウィンドウを中央に表示
     root.update_idletasks()
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
@@ -795,6 +806,10 @@ if __name__ == "__main__":
     root.geometry(f'{window_width}x{window_height}+{x}+{y}')
     
     sv_ttk.set_theme("dark")
+    
+    # メインアプリのモジュール名をプラグインから参照可能にするためのトリック
+#    main_module_name = Path(__file__).stem
+#    sys.modules[main_module_name] = sys.modules['__main__']
     
     app = NovelGameEditor(root)
     root.mainloop()
