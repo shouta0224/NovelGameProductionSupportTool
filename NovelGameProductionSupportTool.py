@@ -168,15 +168,15 @@ class NovelGameEditor:
         ttk.Label(scene_info_frame, text="内容:").grid(row=2, column=0, sticky="nw", pady=(5,2))
         self.scene_content_text = TextWithLineNumbers(scene_info_frame, wrap=tk.WORD, height=10);self.scene_content_text.grid(row=2, column=1, sticky="nsew", padx=5, pady=2);self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
         editor_paned.add(scene_info_frame, weight=2)
-        branch_frame = ttk.LabelFrame(editor_paned, text="分岐管理", padding=10);branch_frame.rowconfigure(0, weight=1);branch_frame.columnconfigure(0, weight=1);columns = ("text", "target", "condition");self.branch_tree = ttk.Treeview(branch_frame, columns=columns, show="headings", height=5);self.branch_tree.heading("text", text="選択肢"); self.branch_tree.heading("target", text="遷移先"); self.branch_tree.heading("condition", text="条件");self.branch_tree.column("text", width=120, anchor='w'); self.branch_tree.column("target", width=100, anchor='w'); self.branch_tree.column("condition", width=120, anchor='w');self.branch_tree.grid(row=0, column=0, columnspan=3, sticky="nsew");self.branch_tree.bind('<<TreeviewSelect>>', lambda e: self._update_editor_ui_state());branch_btn_frame = ttk.Frame(branch_frame);branch_btn_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5,0));self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8); self.add_branch_btn.pack(side=tk.LEFT, padx=2);self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8); self.edit_branch_btn.pack(side=tk.LEFT, padx=2);self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8); self.delete_branch_btn.pack(side=tk.LEFT, padx=2);editor_paned.add(branch_frame, weight=1)
-    
-    # --- ここからが修正箇所 ---
+        branch_frame = ttk.LabelFrame(editor_paned, text="分岐管理", padding=10);branch_frame.rowconfigure(0, weight=1);branch_frame.columnconfigure(0, weight=1);columns = ("text", "target", "condition");self.branch_tree = ttk.Treeview(branch_frame, columns=columns, show="headings", height=5);self.branch_tree.heading("text", text="選択肢"); self.branch_tree.heading("target", text="遷移先"); self.branch_tree.heading("condition", text="条件");self.branch_tree.column("text", width=120, anchor='w'); self.branch_tree.column("target", width=100, anchor='w'); self.branch_tree.column("condition", width=120, anchor='w');self.branch_tree.grid(row=0, column=0, columnspan=3, sticky="nsew");self.branch_tree.bind('<<TreeviewSelect>>', self._update_branch_buttons_state)
+        branch_btn_frame = ttk.Frame(branch_frame);branch_btn_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5,0));self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8); self.add_branch_btn.pack(side=tk.LEFT, padx=2);self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8); self.edit_branch_btn.pack(side=tk.LEFT, padx=2);self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8); self.delete_branch_btn.pack(side=tk.LEFT, padx=2);editor_paned.add(branch_frame, weight=1)
+
+    # --- ここからが修正箇所 (復元) ---
     def _update_editor_ui_state(self):
         is_scene_selected = self.selected_scene is not None
         state = tk.NORMAL if is_scene_selected else tk.DISABLED
         
         self.scene_name_entry.config(state=state)
-        # カスタムウィジェット内部のTextウィジェットの状態を変更
         self.scene_content_text.text.config(state=state)
         
         self.scene_name_entry.delete(0, tk.END)
@@ -187,11 +187,7 @@ class NovelGameEditor:
             self.scene_content_text.insert("1.0", self.selected_scene.content)
         
         self.add_branch_btn.config(state=state)
-        is_branch_selected = bool(self.branch_tree.selection())
-        branch_state = tk.NORMAL if is_scene_selected and is_branch_selected else tk.DISABLED
-        self.edit_branch_btn.config(state=branch_state)
-        self.delete_branch_btn.config(state=branch_state)
-        self._update_branch_list()
+        self._update_branch_list() # 分岐リストの更新とボタンの状態更新を呼び出す
     # --- 修正ここまで ---
 
     def _bind_events(self):
@@ -303,12 +299,22 @@ class NovelGameEditor:
                 self.canvas.create_text(mid_x, mid_y - (6 * self.scale), text=branch["text"], fill="#CCCCCC", font=font)
                 if branch["condition"]: self.canvas.create_text(mid_x, mid_y + (6 * self.scale), text=f"[{branch['condition']}]", fill="#AAAAAA", font=cond_font)
     def get_scene_by_id(self, scene_id: str) -> Optional[Scene]: return next((s for s in self.scenes if s.id == scene_id), None)
+    
     def _update_branch_list(self):
         self.branch_tree.delete(*self.branch_tree.get_children())
-        if not self.selected_scene: return
-        scene_map = {s.id: s.name for s in self.scenes}
-        for i, branch in enumerate(self.selected_scene.branches):
-            target_name = scene_map.get(branch["target"], "不明なシーン"); self.branch_tree.insert("", tk.END, iid=str(i), values=(branch["text"], target_name, branch["condition"]))
+        if self.selected_scene:
+            scene_map = {s.id: s.name for s in self.scenes}
+            for i, branch in enumerate(self.selected_scene.branches):
+                target_name = scene_map.get(branch["target"], "不明なシーン")
+                self.branch_tree.insert("", tk.END, iid=str(i), values=(branch["text"], target_name, branch["condition"]))
+        self._update_branch_buttons_state() # 最後にボタンの状態を更新
+
+    def _update_branch_buttons_state(self, event=None):
+        is_branch_selected = bool(self.branch_tree.selection())
+        state = tk.NORMAL if self.selected_scene and is_branch_selected else tk.DISABLED
+        self.edit_branch_btn.config(state=state)
+        self.delete_branch_btn.config(state=state)
+
     def _update_status_bar(self):
         status = f"選択中: {self.selected_scene.name}" if self.selected_scene else "シーン未選択"; status += f" | シーン数: {len(self.scenes)} | ズーム: {self.scale:.2f}"; self.status_bar.config(text=status)
     def _check_dirty_and_proceed(self) -> bool:
