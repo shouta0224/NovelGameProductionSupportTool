@@ -280,19 +280,70 @@ class NovelGameEditor:
         self.file_menu.entryconfig("名前を付けて保存...", accelerator=self.config_manager.get_shortcut_display('save_project_as'))
         self.edit_menu.entryconfig("シーンを追加", accelerator=self.config_manager.get_shortcut_display('add_scene'))
     def _create_editor_widgets(self, parent_frame):
-        editor_paned = ttk.PanedWindow(parent_frame, orient=tk.VERTICAL);editor_paned.pack(fill=tk.BOTH, expand=True)
-        scene_info_frame = ttk.LabelFrame(editor_paned, text="シーン情報", padding=10);scene_info_frame.columnconfigure(1, weight=1);scene_info_frame.rowconfigure(2, weight=1)
+        # エディタ領域をNotebookウィジェットで作成
+        self.editor_notebook = ttk.Notebook(parent_frame)
+        self.editor_notebook.pack(fill=tk.BOTH, expand=True)
+
+        # シーン/分岐タブ用のPanedWindowを作成
+        scene_tab_pane = ttk.PanedWindow(self.editor_notebook, orient=tk.VERTICAL)
+        self.editor_notebook.add(scene_tab_pane, text="シーン/分岐")
+
+        # --- ここから下は、元のコードとほぼ同じ ---
+        # scene_info_frameとbranch_frameの親を scene_tab_pane に変更する
+        scene_info_frame = ttk.LabelFrame(scene_tab_pane, text="シーン情報", padding=10)
+        scene_info_frame.columnconfigure(1, weight=1)
+        scene_info_frame.rowconfigure(2, weight=1)
+        
         ttk.Label(scene_info_frame, text="シーン名:").grid(row=0, column=0, sticky="w", pady=2)
-        self.scene_name_entry = ttk.Entry(scene_info_frame);self.scene_name_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2);self.scene_name_entry.bind("<FocusOut>", self._on_scene_data_changed);self.scene_name_entry.bind("<Return>", self._on_scene_data_changed)
-        self.editor_plugin_frame = ttk.Frame(scene_info_frame);self.editor_plugin_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0), padx=5)
+        self.scene_name_entry = ttk.Entry(scene_info_frame)
+        self.scene_name_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+        self.scene_name_entry.bind("<FocusOut>", self._on_scene_data_changed)
+        self.scene_name_entry.bind("<Return>", self._on_scene_data_changed)
+        
+        self.editor_plugin_frame = ttk.Frame(scene_info_frame)
+        self.editor_plugin_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0), padx=5)
+        
         ttk.Label(scene_info_frame, text="内容:").grid(row=2, column=0, sticky="nw", pady=(5,2))
-        self.scene_content_text = TextWithLineNumbers(scene_info_frame, wrap=tk.WORD, height=10);self.scene_content_text.grid(row=2, column=1, sticky="nsew", padx=5, pady=2);self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
-        self.text_info_label = ttk.Label(scene_info_frame, text="文字数: 0 | 行数: 1");self.text_info_label.grid(row=3, column=1, sticky="e", padx=5)
+        self.scene_content_text = TextWithLineNumbers(scene_info_frame, wrap=tk.WORD, height=10)
+        self.scene_content_text.grid(row=2, column=1, sticky="nsew", padx=5, pady=2)
+        self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
+        
+        self.text_info_label = ttk.Label(scene_info_frame, text="文字数: 0 | 行数: 1")
+        self.text_info_label.grid(row=3, column=1, sticky="e", padx=5)
         self.scene_content_text.text.bind("<<Modified>>", self._update_text_info, add=True)
-        editor_paned.add(scene_info_frame, weight=2)
-        branch_frame = ttk.LabelFrame(editor_paned, text="分岐管理", padding=10);branch_frame.rowconfigure(0, weight=1);branch_frame.columnconfigure(0, weight=1);columns = ("text", "target", "condition");self.branch_tree = ttk.Treeview(branch_frame, columns=columns, show="headings", height=5);self.branch_tree.heading("text", text="選択肢"); self.branch_tree.heading("target", text="遷移先"); self.branch_tree.heading("condition", text="条件");self.branch_tree.column("text", width=120, anchor='w'); self.branch_tree.column("target", width=100, anchor='w'); self.branch_tree.column("condition", width=120, anchor='w');self.branch_tree.grid(row=0, column=0, columnspan=3, sticky="nsew");self.branch_tree.bind('<<TreeviewSelect>>', self._update_branch_buttons_state);self.branch_tree.bind('<Double-1>', self.edit_branch)
-        branch_btn_frame = ttk.Frame(branch_frame);branch_btn_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5,0));self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8); self.add_branch_btn.pack(side=tk.LEFT, padx=2);self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8); self.edit_branch_btn.pack(side=tk.LEFT, padx=2);self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8); self.delete_branch_btn.pack(side=tk.LEFT, padx=2);editor_paned.add(branch_frame, weight=1)
-        Tooltip(self.add_branch_btn, f"分岐を追加 ({self.config_manager.get_shortcut_display('add_branch')})");Tooltip(self.edit_branch_btn, "選択した分岐を編集 (ダブルクリック)");Tooltip(self.delete_branch_btn, "選択した分岐を削除 (Delete)")
+        
+        scene_tab_pane.add(scene_info_frame, weight=2)
+
+        branch_frame = ttk.LabelFrame(scene_tab_pane, text="分岐管理", padding=10)
+        branch_frame.rowconfigure(0, weight=1)
+        branch_frame.columnconfigure(0, weight=1)
+        columns = ("text", "target", "condition")
+        self.branch_tree = ttk.Treeview(branch_frame, columns=columns, show="headings", height=5)
+        self.branch_tree.heading("text", text="選択肢")
+        self.branch_tree.heading("target", text="遷移先")
+        self.branch_tree.heading("condition", text="条件")
+        self.branch_tree.column("text", width=120, anchor='w')
+        self.branch_tree.column("target", width=100, anchor='w')
+        self.branch_tree.column("condition", width=120, anchor='w')
+        self.branch_tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
+        self.branch_tree.bind('<<TreeviewSelect>>', self._update_branch_buttons_state)
+        self.branch_tree.bind('<Double-1>', self.edit_branch)
+        
+        branch_btn_frame = ttk.Frame(branch_frame)
+        branch_btn_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5,0))
+        self.add_branch_btn = ttk.Button(branch_btn_frame, text="追加", command=self.add_branch, width=8)
+        self.add_branch_btn.pack(side=tk.LEFT, padx=2)
+        self.edit_branch_btn = ttk.Button(branch_btn_frame, text="編集", command=self.edit_branch, width=8)
+        self.edit_branch_btn.pack(side=tk.LEFT, padx=2)
+        self.delete_branch_btn = ttk.Button(branch_btn_frame, text="削除", command=self.delete_branch, width=8)
+        self.delete_branch_btn.pack(side=tk.LEFT, padx=2)
+        
+        # ★★★ ここが修正された箇所 ★★★
+        scene_tab_pane.add(branch_frame, weight=1)
+
+        Tooltip(self.add_branch_btn, f"分岐を追加 ({self.config_manager.get_shortcut_display('add_branch')})")
+        Tooltip(self.edit_branch_btn, "選択した分岐を編集 (ダブルクリック)")
+        Tooltip(self.delete_branch_btn, "選択した分岐を削除 (Delete)")
     def _bind_events(self):
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing);self.canvas.bind("<ButtonPress-1>", self._on_canvas_press);self.canvas.bind("<B1-Motion>", self._on_canvas_drag);self.canvas.bind("<ButtonRelease-1>", self._on_canvas_release);self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click);self.canvas.bind("<Button-3>", self._on_canvas_right_click)
         self.canvas.bind("<MouseWheel>", self._on_canvas_mousewheel); self.canvas.bind("<Control-MouseWheel>", lambda e: self._on_canvas_mousewheel(e, True)); self.canvas.bind("<Shift-MouseWheel>", lambda e: self.canvas.xview_scroll(-1 * (1 if e.delta > 0 else -1), "units"))
@@ -427,10 +478,29 @@ class NovelGameEditor:
         content = self.scene_content_text.get("1.0", "end-1c"); char_count = len(content); line_count = content.count("\n") + 1 if content else 0
         self.text_info_label.config(text=f"文字数: {char_count} | 行数: {line_count}"); self.scene_content_text.text.edit_modified(False)
     def _check_dirty_and_proceed(self) -> bool:
-        if not self.is_dirty: return True
-        answer = messagebox.askyesnocancel("確認", "現在のプロジェクトに変更があります。保存しますか？");
-        if answer is True: return self.save_project()
-        return answer
+        """
+        未保存の変更があるか確認し、ユーザーの選択に応じて処理を進めるか判断する。
+        戻り値:
+            True: 処理を続行してよい (保存した or 保存しないことを選択した)
+            False: 処理をキャンセルする
+        """
+        if not self.is_dirty:
+            return True # 変更がないので、そのまま続行
+
+        answer = messagebox.askyesnocancel(
+            "確認",
+            "現在のプロジェクトに変更があります。保存しますか？"
+        )
+
+        if answer is True:
+            # 「はい」-> 保存を試み、成功すれば続行
+            return self.save_project()
+        elif answer is False:
+            # 「いいえ」-> 保存せずに続行
+            return True
+        else: # answer is None
+            # 「キャンセル」-> 処理を中断
+            return False
     def _on_closing(self):
         if self._check_dirty_and_proceed(): self.root.destroy()
     def new_project(self, event=None, startup=False):
