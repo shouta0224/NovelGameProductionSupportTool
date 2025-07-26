@@ -94,6 +94,10 @@ class PluginManager:
         plugin_files = list(self.plugin_dir.glob("*.py")); print(f"[プラグインマネージャ] 発見したPythonファイル: {[f.name for f in plugin_files]}")
         found_plugins = [f.stem for f in plugin_files if f.is_file() and not f.name.startswith("_")]; print(f"[プラグインマネージャ] ロード対象プラグイン: {found_plugins}"); return found_plugins
     def load_plugin(self, plugin_name: str) -> bool:
+        # 設定をチェックし、無効なプラグインはロードしない
+        if not self.app.config_manager.is_plugin_enabled(plugin_name):
+            print(f"プラグイン '{plugin_name}' は設定で無効化されています。スキップします。")
+            return False
         if plugin_name in self.plugins: return False
         try:
             sys.path.insert(0, str(self.plugin_dir)); module = importlib.import_module(plugin_name); sys.path.pop(0)
@@ -145,6 +149,22 @@ class ConfigManager:
         recent_files.insert(0, path)
         for key in self.config.options('RECENT_FILES'): self.config.remove_option('RECENT_FILES', key)
         for i, p in enumerate(recent_files[:5]): self.config.set('RECENT_FILES', f'file_{i}', str(p))
+        self._save_config()
+    def _ensure_plugin_section(self):
+        """[PLUGINS]セクションがなければ作成する"""
+        if not self.config.has_section('PLUGINS'):
+            self.config.add_section('PLUGINS')
+
+    def is_plugin_enabled(self, plugin_name: str) -> bool:
+        """指定されたプラグインが有効かどうかを返す。デフォルトは有効。"""
+        self._ensure_plugin_section()
+        # getbooleanは'true'/'false'を解釈してくれる。存在しない場合は True を返す。
+        return self.config.getboolean('PLUGINS', plugin_name, fallback=True)
+
+    def set_plugin_enabled(self, plugin_name: str, enabled: bool):
+        """プラグインの有効/無効状態を設定ファイルに保存する。"""
+        self._ensure_plugin_section()
+        self.config.set('PLUGINS', plugin_name, 'true' if enabled else 'false')
         self._save_config()
 
 # --- データ構造 ---
@@ -231,6 +251,62 @@ class BranchDialog(tk.Toplevel):
         if not self.target_id: messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self); return
         self.result = {"text": text, "target": self.target_id, "condition": self.condition_entry.get().strip()}; self.destroy()
 
+class PluginManagementDialog(tk.Toplevel):
+    """プラグインの有効/無効を管理するダイアログ"""
+    def __init__(self, parent, plugin_manager: PluginManager, config_manager: ConfigManager):
+        super().__init__(parent)
+        self.plugin_manager = plugin_manager
+        self.config_manager = config_manager
+        
+        self.title("プラグイン管理")
+        self.transient(parent)
+        self.grab_set()
+
+        self.plugin_vars: Dict[str, tk.BooleanVar] = {}
+        self._create_widgets()
+        self.resizable(False, False)
+        self.wait_window(self)
+
+    def _create_widgets(self):
+        main_frame = ttk.Frame(self, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text="インストール済みプラグイン:", font="-weight bold").pack(anchor="w", pady=(0, 10))
+
+        # 発見されたすべてのプラグインをリストアップ
+        all_plugins = self.plugin_manager.discover_plugins()
+        if not all_plugins:
+            ttk.Label(main_frame, text="プラグインが見つかりません。").pack()
+        else:
+            for plugin_name in sorted(all_plugins):
+                # 現在の設定を読み込んでBooleanVarを作成
+                is_enabled = self.config_manager.is_plugin_enabled(plugin_name)
+                var = tk.BooleanVar(value=is_enabled)
+                self.plugin_vars[plugin_name] = var
+                
+                cb = ttk.Checkbutton(main_frame, text=plugin_name, variable=var)
+                cb.pack(anchor="w", padx=10)
+
+        info_label = ttk.Label(main_frame, text="変更を反映するには、アプリケーションの再起動が必要です。", foreground="orange")
+        info_label.pack(pady=(20, 10))
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=(5, 0))
+        
+        ttk.Button(button_frame, text="保存して閉じる", command=self._save_and_close).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="キャンセル", command=self.destroy).pack(side=tk.LEFT, padx=5)
+
+    def _save_and_close(self):
+        for plugin_name, var in self.plugin_vars.items():
+            self.config_manager.set_plugin_enabled(plugin_name, var.get())
+        
+        messagebox.showinfo(
+            "設定保存完了",
+            "プラグイン設定を保存しました。\n変更を完全に反映するには、アプリケーションを再起動してください。",
+            parent=self
+        )
+        self.destroy()
+
 # --- メインアプリケーションクラス ---
 class NovelGameEditor:
     NODE_RADIUS = 35
@@ -241,6 +317,10 @@ class NovelGameEditor:
         self.is_dirty = False;self.scale = 1.0;self.view_offset_x = 0.0;self.view_offset_y = 0.0;self.drag_state = {};self.menubar = tk.Menu(self.root);self.plugin_menu: Optional[tk.Menu] = None
         self.recent_files_menu: Optional[tk.Menu] = None
         self._create_widgets();self._bind_events();self.setup_shortcuts();self._load_plugins();self.new_project(startup=True);self._update_status_bar()
+
+    def _show_plugin_management(self):
+        """プラグイン管理ダイアログを表示する"""
+        PluginManagementDialog(self.root, self.plugin_manager, self.config_manager)
     
     def _create_widgets(self):
         self.root.config(menu=self.menubar);self._create_menu()
@@ -273,6 +353,7 @@ class NovelGameEditor:
         self.edit_menu.add_command(label="選択中のシーンを削除", command=self.delete_scene, accelerator="Delete")
         self.menubar.add_cascade(label="編集", menu=self.edit_menu)
         self.plugin_menu = tk.Menu(self.menubar, tearoff=0)
+        self.plugin_menu.add_command(label="プラグイン管理...", command=self._show_plugin_management)
         self.menubar.add_cascade(label="プラグイン", menu=self.plugin_menu, state="disabled")
         self._update_recent_files_menu()
     
@@ -660,27 +741,36 @@ class NovelGameEditor:
         self.current_project_path = path
         self.root.title(f"ノベルゲーム制作支援ツール - {path.name}")
         return self._save_to_file(path)
-    
-    def _save_to_file(self, path: Path) -> bool:
+
+    def _save_to_file(self, path: Path, update_dirty_flag: bool = True) -> bool:
         self._save_current_scene_data()
         
-        # 保存用データを作成
         data_to_save = {}
+        # プラグインが登録したキーのデータを集める
         for key in self.pluggable_data_keys:
-            data_to_save[key] = self.project_data.get(key)
+            # プラグイン側でデータが準備されていることを期待する
+            if key in self.project_data:
+                data_to_save[key] = self.project_data[key]
+        
+        # シーンデータを集める
         data_to_save["scenes"] = [s.to_dict() for s in self.scenes]
 
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data_to_save, f, ensure_ascii=False, indent=2)
             
-            self._mark_dirty(False)
-            self.config_manager.add_recent_file(path)
-            self._update_recent_files_menu()
-            self._update_status_bar(f"プロジェクトを '{path.name}' に保存しました。")
+            if update_dirty_flag:
+                self._mark_dirty(False)
+                self.config_manager.add_recent_file(path)
+                self._update_recent_files_menu()
+                self._update_status_bar(f"プロジェクトを '{path.name}' に保存しました。")
             return True
         except Exception as e:
-            messagebox.showerror("エラー", f"保存に失敗しました:\n{e}")
+            # バックアップ時はダイアログを出さず、コンソール出力に留める
+            if update_dirty_flag:
+                messagebox.showerror("エラー", f"保存に失敗しました:\n{e}")
+            else:
+                print(f"バックアップ保存失敗: {e}")
             return False
 
     def _update_recent_files_menu(self):

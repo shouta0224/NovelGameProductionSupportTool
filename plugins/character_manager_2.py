@@ -93,10 +93,12 @@ class CharacterManagerPlugin(IPlugin):
             self._load_characters_from_project()
             print("[プラグイン: CharacterManager] プロジェクトからキャラクターを読み込みました。")
             
-        def save_to_file_with_chars(path: Path) -> bool:
+        def save_to_file_with_chars(path: Path, *args, **kwargs) -> bool:
             self._save_current_character_data()
             self.app.project_data['characters'] = [char.to_dict() for char in self.characters.values()]
-            return original_save_to_file(path)
+            
+            # 受け取った可変長引数(*args, **kwargs)をそのまま元の関数に渡す
+            return original_save_to_file(path, *args, **kwargs)
 
         # メソッドを差し替え
         self.app.new_project = new_project_with_chars
