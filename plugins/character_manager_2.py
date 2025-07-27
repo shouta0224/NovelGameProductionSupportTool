@@ -262,7 +262,7 @@ class CharacterManagerPlugin(IPlugin):
             
         char = self.characters[self.selected_character_id]
         char.name = self.name_entry.get()
-        char.description = self.desc_text.get("1.e", tk.END).strip()
+        char.description = self.desc_text.get("1.0", tk.END).strip()
 
     def _on_data_changed(self, event=None):
         """フォームのデータが変更されたときに呼び出される"""
