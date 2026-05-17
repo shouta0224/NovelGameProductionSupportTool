@@ -1141,7 +1141,7 @@ class NovelGameEditor:
 
     def select_scene(self, scene: Optional[Scene]):
         """シーンを選択状態にする"""
-        if self.selected_scene == scene:
+        if self.selected_scene is scene:
             return
             
         self._save_current_scene_data()
@@ -1670,7 +1670,8 @@ class NovelGameEditor:
         
         if name_changed or content_changed:
             self._save_current_scene_data()
-            self._redraw_canvas()
+            if name_changed:
+                self._redraw_canvas()
             self._mark_dirty()
 
     def _on_editor_modified(self, event=None):

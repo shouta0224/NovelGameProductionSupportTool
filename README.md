@@ -20,7 +20,7 @@
 
 ## スクリーンショット / Screenshots
 
-> *(スクリーンショットは `screenshots/` フォルダに追加予定)*
+![スクリーンショット](screenshots/screenshot.png)
 
 ---
 
