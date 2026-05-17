@@ -636,10 +636,6 @@ class BranchDialog(tk.Toplevel):
     
     def _on_ok(self):
         text = self.text_entry.get().strip()
-        if not text:
-            messagebox.showerror("エラー", "選択肢テキストを入力してください。", parent=self)
-            return
-            
         if not self.target_id:
             messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self)
             return
@@ -902,7 +898,7 @@ class NovelGameEditor:
         self.scene_content_text.grid(
             row=2, column=1, sticky="nsew", padx=5, pady=2
         )
-        self.scene_content_text.bind("<FocusOut>", self._on_scene_data_changed)
+        self.scene_content_text.text.bind("<FocusOut>", self._on_scene_data_changed)
         
         self.text_info_label = ttk.Label(
             scene_info_frame,
