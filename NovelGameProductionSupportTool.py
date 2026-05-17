@@ -429,10 +429,11 @@ class ConfigManager:
 
 # --- UIダイアログ ---
 class SettingsDialog(tk.Toplevel):
-    def __init__(self, parent, config_manager: ConfigManager):
+    def __init__(self, parent, config_manager: ConfigManager, on_save_callback=None):
         super().__init__(parent)
         self.title("設定")
         self.config_manager = config_manager
+        self.on_save_callback = on_save_callback
         self.transient(parent)
         self.grab_set()
         self.shortcut_entry_widgets = {}
@@ -481,8 +482,8 @@ class SettingsDialog(tk.Toplevel):
         for action_key, entry_widget in self.shortcut_entry_widgets.items():
             self.config_manager.set_shortcut(action_key, entry_widget.get().strip())
             
-        if hasattr(self.master, 'setup_shortcuts'):
-            self.master.setup_shortcuts()
+        if self.on_save_callback:
+            self.on_save_callback()
             
         messagebox.showinfo("設定完了", "ショートカットキー設定を保存しました。", parent=self)
         self.destroy()
@@ -1680,7 +1681,7 @@ class NovelGameEditor:
 
     def _show_settings(self):
         """設定ダイアログを表示"""
-        SettingsDialog(self.root, self.config_manager)
+        SettingsDialog(self.root, self.config_manager, on_save_callback=self.setup_shortcuts)
 
     def _show_plugin_management(self):
         """プラグイン管理ダイアログを表示"""
@@ -1751,15 +1752,19 @@ class NovelGameEditor:
             parts = shortcut.replace('+', '-').split('-')
             modifiers = sorted([p.capitalize() for p in parts[:-1] if p.lower() in ('control', 'alt', 'shift')])
             key = parts[-1].lower()
-            
+
             if not key:
                 continue
-                
+
+            # Shift + 英字の場合: <Control-Shift-s> はShift押下時にkeysymが'S'になるため
+            # 発火しない。<Control-S> 形式（大文字）に変換して正しく動作させる
+            if 'Shift' in modifiers and len(key) == 1 and key.isalpha():
+                modifiers = [m for m in modifiers if m != 'Shift']
+                key = key.upper()
+
             # tkinterのフォーマットに変換
-            tk_key_parts = []
-            for mod in modifiers:
-                tk_key_parts.append(mod)
-                
+            tk_key_parts = list(modifiers)
+
             # 'plus' や 'minus' などの特殊なキー名を正しく扱う
             key_map = {'plus': 'plus', 'minus': 'minus', 'equal': 'equal'}
             tk_key_parts.append(key_map.get(key, key))
