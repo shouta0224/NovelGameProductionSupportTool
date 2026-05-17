@@ -292,27 +292,30 @@ class PluginManager:
         if plugin_name in self.plugins:
             return False
 
+        plugin_file = self.plugin_dir / f"{plugin_name}.py"
+        if not plugin_file.exists():
+            print(f"プラグインファイル '{plugin_file}' が見つかりません。")
+            return False
+
         try:
-            # プラグインディレクトリを一時的にパスに追加
-            sys.path.insert(0, str(self.plugin_dir))
-            try:
-                module = importlib.import_module(plugin_name)
-            finally:
-                sys.path.pop(0)
+            spec = importlib.util.spec_from_file_location(plugin_name, plugin_file)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[plugin_name] = module
+            spec.loader.exec_module(module)
 
             for _, obj in inspect.getmembers(module, inspect.isclass):
-                if (issubclass(obj, IPlugin) and 
-                    obj != IPlugin and 
+                if (issubclass(obj, IPlugin) and
+                    obj != IPlugin and
                     obj.__module__ == plugin_name):
-                    
+
                     plugin_instance = obj(self.app)
                     plugin_instance.setup()
                     plugin_instance.register()
-                    
+
                     self.plugins[plugin_name] = plugin_instance
                     print(f"プラグイン '{plugin_name}' をロードしました。")
                     return True
-                    
+
         except Exception as e:
             print(f"プラグイン '{plugin_name}' のロード中にエラーが発生しました: {e}")
             if plugin_name in sys.modules:
@@ -1157,13 +1160,16 @@ class NovelGameEditor:
                 target = self.get_scene_by_id(target_id)
                 if source and target:
                     self.select_scene(source)
-                    text = simpledialog.askstring(
+                    dialog = BranchDialog(
+                        self.root,
                         "分岐を追加",
-                        f"「{source.name}」→「{target.name}」\n選択肢テキスト:",
-                        parent=self.root
+                        self.scenes,
+                        source,
+                        app=self,
+                        initial_target_id=target_id
                     )
-                    if text is not None:
-                        source.add_branch(text=text, target=target_id)
+                    if dialog.result:
+                        source.add_branch(**dialog.result)
                         self._mark_dirty()
                         self._update_branch_list()
                         self._redraw_canvas()
@@ -1886,13 +1892,15 @@ class NovelGameEditor:
 
 # --- メイン実行ブロック ---
 if __name__ == "__main__":
-    # モジュール参照を設定 (プラグイン用)
-    if not getattr(sys, 'frozen', False):
-        try:
+    # モジュール参照を設定 (プラグイン用) — frozen時もEXE名でアクセスできるよう登録
+    try:
+        if getattr(sys, 'frozen', False):
+            APP_MODULE_NAME = Path(sys.executable).stem
+        else:
             APP_MODULE_NAME = Path(__file__).stem
-            sys.modules[APP_MODULE_NAME] = sys.modules['__main__']
-        except NameError:  # 対話モードなど__file__がない場合
-            pass
+        sys.modules[APP_MODULE_NAME] = sys.modules['__main__']
+    except Exception:
+        pass
             
     root = tk.Tk()
     root.update_idletasks()
