@@ -1009,7 +1009,9 @@ class NovelGameEditor:
         self.canvas.bind("<MouseWheel>", self._on_mousewheel_combined)  # Windows/macOS
         self.canvas.bind("<Button-4>", self._on_mousewheel_combined)    # Linux (scroll up)
         self.canvas.bind("<Button-5>", self._on_mousewheel_combined)    # Linux (scroll down)
-        
+
+        self.canvas.bind("<Motion>", self._on_canvas_motion)
+
         # キーボードイベント
         self.root.bind("<Delete>", self._on_delete_key_pressed)
 
@@ -1041,26 +1043,35 @@ class NovelGameEditor:
         """キャンバス上でマウスボタンが押された時の処理"""
         self.canvas.focus_set()
         self.canvas.scan_mark(event.x, event.y)
-        
+
         cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
-        clicked_node_id = self._get_node_id_at(cx, cy)
-        
-        if clicked_node_id:
-            scene = self.get_scene_by_id(clicked_node_id)
+        node_id, is_edge = self._get_node_at_with_edge(cx, cy)
+
+        if node_id:
+            scene = self.get_scene_by_id(node_id)
             if scene:
-                self.drag_state = {
-                    "type": "node",
-                    "item_id": clicked_node_id,
-                    "start_x_canvas": cx,
-                    "start_y_canvas": cy,
-                    "last_x_canvas": cx,
-                    "last_y_canvas": cy,
-                    "start_x_screen": event.x,
-                    "start_y_screen": event.y,
-                    "original_x_world": scene.x,
-                    "original_y_world": scene.y,
-                    "moved": False
-                }
+                if is_edge:
+                    self.drag_state = {
+                        "type": "connect",
+                        "source_id": node_id,
+                        "start_x_screen": event.x,
+                        "start_y_screen": event.y,
+                        "moved": False
+                    }
+                else:
+                    self.drag_state = {
+                        "type": "node",
+                        "item_id": node_id,
+                        "start_x_canvas": cx,
+                        "start_y_canvas": cy,
+                        "last_x_canvas": cx,
+                        "last_y_canvas": cy,
+                        "start_x_screen": event.x,
+                        "start_y_screen": event.y,
+                        "original_x_world": scene.x,
+                        "original_y_world": scene.y,
+                        "moved": False
+                    }
         else:
             self.drag_state = {
                 "type": "pan",
@@ -1089,11 +1100,26 @@ class NovelGameEditor:
         if drag_type == "node":
             dx = cx - self.drag_state["last_x_canvas"]
             dy = cy - self.drag_state["last_y_canvas"]
-            
+
             self.canvas.move(f"node_{self.drag_state['item_id']}", dx, dy)
             self.drag_state["last_x_canvas"], self.drag_state["last_y_canvas"] = cx, cy
         elif drag_type == "pan":
             self.canvas.scan_dragto(event.x, event.y, gain=1)
+        elif drag_type == "connect":
+            self.canvas.delete("temp_connect_line")
+            source = self.get_scene_by_id(self.drag_state["source_id"])
+            if source:
+                sx, sy = self._world_to_screen(source.x, source.y)
+                target_id, _ = self._get_node_at_with_edge(cx, cy)
+                line_color = "#87CEFA" if target_id and target_id != self.drag_state["source_id"] else "#AAAAAA"
+                self.canvas.create_line(
+                    sx, sy, cx, cy,
+                    fill=line_color,
+                    width=max(1.5, 2 * self.scale),
+                    dash=(8, 4),
+                    arrow=tk.LAST,
+                    tags="temp_connect_line"
+                )
 
     def _on_canvas_release(self, event):
         """キャンバス上でマウスボタンが離された時の処理"""
@@ -1102,24 +1128,56 @@ class NovelGameEditor:
             
         cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         
+        drag_type = self.drag_state.get("type")
+
         if not self.drag_state.get("moved"):
-            if self.drag_state.get("type") == "node":
+            if drag_type == "node":
                 self.select_scene(self.get_scene_by_id(self.drag_state["item_id"]))
-            elif self.drag_state.get("type") == "pan":
+            elif drag_type == "connect":
+                self.select_scene(self.get_scene_by_id(self.drag_state["source_id"]))
+            elif drag_type == "pan":
                 self.select_scene(None)
-        elif self.drag_state.get("type") == "node":
+        elif drag_type == "node":
             scene = self.get_scene_by_id(self.drag_state["item_id"])
             if scene:
                 total_dx_canvas = cx - self.drag_state["start_x_canvas"]
                 total_dy_canvas = cy - self.drag_state["start_y_canvas"]
-                
+
                 scene.x = self.drag_state["original_x_world"] + (total_dx_canvas / self.scale)
                 scene.y = self.drag_state["original_y_world"] + (total_dy_canvas / self.scale)
-                
+
                 self._mark_dirty()
                 self._redraw_canvas()
-                
+        elif drag_type == "connect":
+            self.canvas.delete("temp_connect_line")
+            target_id, _ = self._get_node_at_with_edge(cx, cy)
+            source_id = self.drag_state["source_id"]
+            if target_id and target_id != source_id:
+                source = self.get_scene_by_id(source_id)
+                target = self.get_scene_by_id(target_id)
+                if source and target:
+                    self.select_scene(source)
+                    text = simpledialog.askstring(
+                        "分岐を追加",
+                        f"「{source.name}」→「{target.name}」\n選択肢テキスト:",
+                        parent=self.root
+                    )
+                    if text is not None:
+                        source.add_branch(text=text, target=target_id)
+                        self._mark_dirty()
+                        self._update_branch_list()
+                        self._redraw_canvas()
+
+        self.canvas.delete("temp_connect_line")
         self.drag_state = {}
+
+    def _on_canvas_motion(self, event):
+        """カーソル位置に応じてカーソル形状を変更"""
+        if self.drag_state:
+            return
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        _, is_edge = self._get_node_at_with_edge(cx, cy)
+        self.canvas.config(cursor="crosshair" if is_edge else "")
 
     def _on_canvas_double_click(self, event):
         """キャンバス上のダブルクリック処理"""
@@ -1159,7 +1217,7 @@ class NovelGameEditor:
     def _get_node_id_at(self, x: float, y: float) -> Optional[str]:
         """指定座標にあるノードのIDを取得"""
         items = self.canvas.find_overlapping(x - 2, y - 2, x + 2, y + 2)
-        
+
         for item in reversed(items):
             tags = self.canvas.gettags(item)
             if "node" in tags:
@@ -1167,6 +1225,17 @@ class NovelGameEditor:
                     if tag.startswith("node_"):
                         return tag.split("_", 1)[1]
         return None
+
+    def _get_node_at_with_edge(self, cx: float, cy: float) -> Tuple[Optional[str], bool]:
+        """指定したキャンバス座標のノードIDと、エッジ付近（接続ゾーン）かどうかを返す"""
+        for scene in reversed(self.scenes):
+            sx, sy = self._world_to_screen(scene.x, scene.y)
+            radius = DEFAULT_NODE_RADIUS * self.scale
+            dist = math.hypot(cx - sx, cy - sy)
+            if dist <= radius * 1.2:
+                is_edge = dist >= radius * 0.55
+                return scene.id, is_edge
+        return None, False
 
     def select_scene(self, scene: Optional[Scene]):
         """シーンを選択状態にする"""
