@@ -1,37 +1,49 @@
-# NovelGameProductionSupportTool
+# ノベルゲーム制作支援ツール
 
-ノベルゲームのストーリー分岐をビジュアルで設計・管理するためのデスクトップツールです。
+**ノベルゲームの分岐シナリオを、図を描くように作れるツール。**
 
-> A desktop tool for visually designing and managing story branches in novel games.
+ストーリー分岐をノードグラフとして視覚的に設計・管理できる、ノベルゲーム開発者向けのデスクトップアプリケーションです。  
+Ren'Py・ティラノスクリプトなど、あらゆるノベルゲームエンジンと組み合わせて使えます。
 
----
-
-## 特徴 / Features
-
-- **ビジュアルノードエディタ** — ストーリーの分岐をノードグラフとして視覚的に把握できます
-- **シーン編集** — タイトルと本文をエディタで編集、文字数・行数をリアルタイム表示
-- **分岐管理** — 選択肢テキスト・遷移先・条件を設定した分岐を追加・編集・削除
-- **プラグインシステム** — 機能をプラグインとして追加可能（自動バックアップ、キャラクター管理など）
-- **ダーク / ライトテーマ** — [sv-ttk](https://github.com/rdbende/Sun-Valley-ttk-theme) による洗練されたUI
-- **カスタマイズ可能なショートカット** — 設定画面からキーバインドを変更可能
-- **最近使ったファイル** — 素早く前回のプロジェクトを開ける
-
----
-
-## スクリーンショット / Screenshots
+> A desktop tool for visually designing and managing story branches in novel games.  
+> Works with any novel game engine (Ren'Py, TyranoScript, etc.)
 
 ![スクリーンショット](screenshots/screenshot.png)
 
 ---
 
-## 動作環境 / Requirements
+## 特徴 / Features
 
-- Python 3.9 以上
-- 依存ライブラリは `requirements.txt` を参照
+- **ビジュアルノードエディタ** — ストーリーの分岐をノードグラフとして視覚的に把握・編集
+- **シーン編集** — タイトルと本文をエディタで編集、文字数・行数をリアルタイム表示
+- **分岐管理** — 選択肢テキスト・遷移先・条件を設定した分岐を追加・編集・削除
+- **プラグインシステム** — 自動バックアップ・キャラクター管理など機能をプラグインで拡張可能
+- **ダーク / ライトテーマ** — [sv-ttk](https://github.com/rdbende/Sun-Valley-ttk-theme) による洗練されたUI
+- **カスタマイズ可能なショートカット** — 設定画面からキーバインドを自由に変更
+- **最近使ったファイル** — 素早く前回のプロジェクトを開ける
 
 ---
 
-## インストール / Installation
+## ダウンロード / Download
+
+**Pythonを必要とせず、そのまま起動できる実行ファイル版を配布しています。**
+
+👉 **[最新版 v1.5.0 をダウンロード](https://github.com/shouta0224/NovelGameProductionSupportTool/releases/latest)**
+
+ZIPを解凍して `NovelGameProductionSupportTool.exe` を起動するだけで使えます。
+
+---
+
+## 動作環境 / Requirements
+
+| | |
+|---|---|
+| OS | Windows 10 / 11 |
+| Python（ソースから起動する場合） | 3.9 以上 |
+
+---
+
+## ソースから起動する場合 / Installation from source
 
 ```bash
 # リポジトリをクローン
@@ -57,8 +69,8 @@ python NovelGameProductionSupportTool.py
 | シーンを選択 | ノードをクリック |
 | シーンを移動 | ノードをドラッグ |
 | 分岐を追加 | シーンを選択した状態で「分岐管理」パネルの「追加」ボタン |
-| ズーム | Ctrl + マウスホイール |
-| パン | マウスホイール（縦） / Shift + マウスホイール（横） |
+| ズーム | `Ctrl` + マウスホイール |
+| スクロール | マウスホイール（縦） / `Shift` + マウスホイール（横） |
 | ビューをリセット | `Ctrl + 0` |
 
 ### ショートカット（デフォルト）
@@ -126,4 +138,4 @@ class MyPlugin(IPlugin):
 
 ## バージョン / Version
 
-**1.5.0** — 最終更新: 2026/5/17
+**v1.5.0** — 2026/5/17
