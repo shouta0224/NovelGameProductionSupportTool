@@ -1110,14 +1110,14 @@ class NovelGameEditor:
         
         if clicked_node_id:
             scene = self.get_scene_by_id(clicked_node_id)
-            if scene and scene != self.selected_scene:
-                self.select_scene(scene)
-                
-            context_menu.add_command(
-                label=f"シーン '{scene.name}' を削除",
-                command=self.delete_scene
-            )
-            context_menu.add_separator()
+            if scene:
+                if scene != self.selected_scene:
+                    self.select_scene(scene)
+                context_menu.add_command(
+                    label=f"シーン '{scene.name}' を削除",
+                    command=self.delete_scene
+                )
+                context_menu.add_separator()
             
         context_menu.add_command(
             label="ここにシーンを追加",
@@ -1140,7 +1140,7 @@ class NovelGameEditor:
             if "node" in tags:
                 for tag in tags:
                     if tag.startswith("node_"):
-                        return tag.split("_")[1]
+                        return tag.split("_", 1)[1]
         return None
 
     def select_scene(self, scene: Optional[Scene]):
@@ -1167,6 +1167,7 @@ class NovelGameEditor:
         if is_scene_selected:
             self.scene_name_entry.insert(0, self.selected_scene.name)
             self.scene_content_text.insert("1.0", self.selected_scene.content)
+            self.scene_content_text.text.edit_modified(False)
             
         self.add_branch_btn.config(state=state)
         self._update_branch_list()
@@ -1211,7 +1212,7 @@ class NovelGameEditor:
         
         content = self.scene_content_text.get("1.0", "end-1c")
         char_count = len(content)
-        line_count = content.count("\n") + 1 if content else 0
+        line_count = content.count("\n") + 1
         
         self.text_info_label.config(text=f"文字数: {char_count} | 行数: {line_count}")
         self.scene_content_text.text.edit_modified(False)
@@ -1541,7 +1542,7 @@ class NovelGameEditor:
                  return_scene=False, at_canvas_pos=None):
         """新しいシーンを追加"""
         if at_canvas_pos:
-            wx, wy = at_canvas_pos
+            wx, wy = self._screen_to_world(at_canvas_pos[0], at_canvas_pos[1])
         elif at_screen_pos:
             wx, wy = self._screen_to_world(at_screen_pos[0], at_screen_pos[1])
         else:
@@ -1669,7 +1670,6 @@ class NovelGameEditor:
         
         if name_changed or content_changed:
             self._save_current_scene_data()
-            self._update_editor_ui_state()  # シーン名変更を即座にUIに反映
             self._redraw_canvas()
             self._mark_dirty()
 

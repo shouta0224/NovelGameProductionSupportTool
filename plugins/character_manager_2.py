@@ -282,6 +282,7 @@ class CharacterManagerPlugin(IPlugin):
         
         self.char_tree.selection_set(new_char.id)
         self.char_tree.focus(new_char.id)
+        self.select_character(new_char.id)
 
     def _delete_character(self):
         if not self.selected_character_id: return
