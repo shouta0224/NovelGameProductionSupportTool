@@ -283,10 +283,23 @@ class PluginManager:
         print(f"[プラグインマネージャ] ロード対象プラグイン: {found_plugins}")
         return found_plugins
 
+    def _log(self, message: str):
+        """EXE環境でのプラグイン動作をファイルに記録する"""
+        print(message)
+        if not getattr(sys, 'frozen', False):
+            return
+        try:
+            import datetime
+            log_path = Path(sys.executable).parent / "plugin_log.txt"
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {message}\n")
+        except Exception:
+            pass
+
     def load_plugin(self, plugin_name: str) -> bool:
         """プラグインのロード"""
         if not self.app.config_manager.is_plugin_enabled(plugin_name):
-            print(f"プラグイン '{plugin_name}' は設定で無効化されています。スキップします。")
+            self._log(f"プラグイン '{plugin_name}' は設定で無効化されています。スキップします。")
             return False
 
         if plugin_name in self.plugins:
@@ -294,30 +307,38 @@ class PluginManager:
 
         plugin_file = self.plugin_dir / f"{plugin_name}.py"
         if not plugin_file.exists():
-            print(f"プラグインファイル '{plugin_file}' が見つかりません。")
+            self._log(f"プラグインファイル '{plugin_file}' が見つかりません。")
             return False
 
         try:
+            # IPluginをプラグインの名前空間に事前注入してimportエラーを防ぐ
             spec = importlib.util.spec_from_file_location(plugin_name, plugin_file)
             module = importlib.util.module_from_spec(spec)
+            module.__dict__['IPlugin'] = IPlugin
             sys.modules[plugin_name] = module
             spec.loader.exec_module(module)
 
             for _, obj in inspect.getmembers(module, inspect.isclass):
-                if (issubclass(obj, IPlugin) and
-                    obj != IPlugin and
-                    obj.__module__ == plugin_name):
+                if obj.__module__ != plugin_name:
+                    continue
+                # クラス名ベースのMROチェック（frozen環境でのクラス同一性問題を回避）
+                mro_names = [c.__name__ for c in obj.__mro__]
+                if 'IPlugin' not in mro_names or obj.__name__ == 'IPlugin':
+                    continue
 
-                    plugin_instance = obj(self.app)
-                    plugin_instance.setup()
-                    plugin_instance.register()
+                plugin_instance = obj(self.app)
+                plugin_instance.setup()
+                plugin_instance.register()
 
-                    self.plugins[plugin_name] = plugin_instance
-                    print(f"プラグイン '{plugin_name}' をロードしました。")
-                    return True
+                self.plugins[plugin_name] = plugin_instance
+                self._log(f"プラグイン '{plugin_name}' をロードしました。")
+                return True
+
+            self._log(f"プラグイン '{plugin_name}': IPluginのサブクラスが見つかりませんでした。")
 
         except Exception as e:
-            print(f"プラグイン '{plugin_name}' のロード中にエラーが発生しました: {e}")
+            import traceback
+            self._log(f"プラグイン '{plugin_name}' のロード中にエラー: {e}\n{traceback.format_exc()}")
             if plugin_name in sys.modules:
                 del sys.modules[plugin_name]
             return False
