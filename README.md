@@ -1,32 +1,129 @@
 # NovelGameProductionSupportTool
 
-ノベルゲーム制作支援ツールです。
-This is a tool to support the creation of novel games.
+ノベルゲームのストーリー分岐をビジュアルで設計・管理するためのデスクトップツールです。
 
-# 使い方 Usage
-画面左側でストーリーの分岐を視覚的に管理できます。右クリックでシーンを追加できます。
-You can visually manage story branches on the left side of the screen. Right-click to add a scene.
-画面右上で選択しているシーンを編集できます。現在タイトルと内容が編集できます。
-Edit the selected scene in the upper right corner of the screen. You can edit the current title and content.
-画面右下で分岐を追加できます。シーンを選択した状態で次のシーンを指定できます。
-Add a branch in the lower right corner of the screen. With a scene selected, you can specify the next scene.
+> A desktop tool for visually designing and managing story branches in novel games.
 
-# ライセンス License
+---
 
-MIT License (https://ja.wikipedia.org/wiki/MIT_License)
+## 特徴 / Features
 
-# 開発環境 Development Environment
+- **ビジュアルノードエディタ** — ストーリーの分岐をノードグラフとして視覚的に把握できます
+- **シーン編集** — タイトルと本文をエディタで編集、文字数・行数をリアルタイム表示
+- **分岐管理** — 選択肢テキスト・遷移先・条件を設定した分岐を追加・編集・削除
+- **プラグインシステム** — 機能をプラグインとして追加可能（自動バックアップ、キャラクター管理など）
+- **ダーク / ライトテーマ** — [sv-ttk](https://github.com/rdbende/Sun-Valley-ttk-theme) による洗練されたUI
+- **カスタマイズ可能なショートカット** — 設定画面からキーバインドを変更可能
+- **最近使ったファイル** — 素早く前回のプロジェクトを開ける
 
-Python
+---
 
-# バージョン Version
+## スクリーンショット / Screenshots
 
-1.3.3
+> *(スクリーンショットは `screenshots/` フォルダに追加予定)*
 
-# 最終更新日 Last updated
+---
 
-2025/7/23
+## 動作環境 / Requirements
 
-# URL
+- Python 3.9 以上
+- 依存ライブラリは `requirements.txt` を参照
 
-https://github.com/shouta0224/NovelGameProductionSupportTool/
+---
+
+## インストール / Installation
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/shouta0224/NovelGameProductionSupportTool.git
+cd NovelGameProductionSupportTool
+
+# 依存ライブラリをインストール
+pip install -r requirements.txt
+
+# 起動
+python NovelGameProductionSupportTool.py
+```
+
+---
+
+## 使い方 / Usage
+
+### 基本操作
+
+| 操作 | 方法 |
+|---|---|
+| シーンを追加 | キャンバス上で右クリック →「ここにシーンを追加」 |
+| シーンを選択 | ノードをクリック |
+| シーンを移動 | ノードをドラッグ |
+| 分岐を追加 | シーンを選択した状態で「分岐管理」パネルの「追加」ボタン |
+| ズーム | Ctrl + マウスホイール |
+| パン | マウスホイール（縦） / Shift + マウスホイール（横） |
+| ビューをリセット | `Ctrl + 0` |
+
+### ショートカット（デフォルト）
+
+| アクション | キー |
+|---|---|
+| 新規プロジェクト | `Ctrl + N` |
+| 開く | `Ctrl + O` |
+| 保存 | `Ctrl + S` |
+| 名前を付けて保存 | `Ctrl + Shift + S` |
+| シーンを追加 | `Ctrl + A` |
+| 分岐を追加 | `Ctrl + B` |
+| ズームイン | `Ctrl + +` |
+| ズームアウト | `Ctrl + -` |
+
+ショートカットは「ファイル」→「設定」から変更できます。
+
+### プロジェクトファイル
+
+プロジェクトは `.ngp` 形式（JSON）で保存されます。テキストエディタで直接編集することも可能です。
+
+---
+
+## プラグイン / Plugins
+
+`plugins/` フォルダに Python ファイルを配置することで機能を拡張できます。
+
+### 同梱プラグイン
+
+| プラグイン | 説明 |
+|---|---|
+| `auto_backup` | 指定間隔でプロジェクトを自動バックアップ（デフォルト: 5分） |
+| `character_manager_2` | キャラクター（名前・説明・カラー・画像）を管理するタブを追加 |
+
+プラグインの有効/無効は「プラグイン」メニュー → 「プラグイン管理」から切り替えられます（再起動が必要）。
+
+### プラグインの作り方
+
+`IPlugin` クラスを継承し、`setup()` / `register()` / `teardown()` を実装するだけです。
+
+```python
+from __main__ import IPlugin
+
+class MyPlugin(IPlugin):
+    def setup(self):
+        pass  # 初期化処理
+
+    def register(self):
+        self.app.add_plugin_menu_command("My Feature", self.my_feature)
+
+    def teardown(self):
+        self.app.remove_plugin_menu_command("My Feature")
+
+    def my_feature(self):
+        print("Hello from my plugin!")
+```
+
+---
+
+## ライセンス / License
+
+[MIT License](LICENSE)
+
+---
+
+## バージョン / Version
+
+**1.3.3** — 最終更新: 2025/7/23

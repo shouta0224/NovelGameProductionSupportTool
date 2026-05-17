@@ -170,6 +170,10 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# This project
+backups/
+*.ngp
+
 # PyPI configuration file
 .pypirc
 
