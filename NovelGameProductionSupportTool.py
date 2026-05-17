@@ -76,9 +76,14 @@ class Tooltip:
         self.widget.bind("<Leave>", self.hide_tooltip)
 
     def show_tooltip(self, event=None):
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
+        bbox = self.widget.bbox("insert")
+        if bbox is None:
+            x = self.widget.winfo_rootx() + 25
+            y = self.widget.winfo_rooty() + 25
+        else:
+            x, y, _, _ = bbox
+            x += self.widget.winfo_rootx() + 25
+            y += self.widget.winfo_rooty() + 25
         
         self.tooltip_window = tk.Toplevel(self.widget)
         self.tooltip_window.wm_overrideredirect(True)
@@ -186,15 +191,16 @@ class TextWithLineNumbers(tk.Frame):
             
         self.linenumbers.delete("all")
         i = self.text.index("@0,0")
-        
-        while True:
+        max_lines = int(self.text.index("end-1c").split(".")[0]) + 1
+
+        for _ in range(max_lines):
             dline = self.text.dlineinfo(i)
             if dline is None:
                 break
-                
+
             y_coord = dline[1]
             line_num_str = str(i).split(".")[0]
-            
+
             self.linenumbers.create_text(
                 38, y_coord,
                 anchor="ne",
@@ -203,6 +209,14 @@ class TextWithLineNumbers(tk.Frame):
                 font=self.font
             )
             i = self.text.index(f"{i}+1line")
+
+    def update_theme_colors(self, theme_name: str):
+        """テーマに合わせて行番号の色を更新"""
+        if theme_name == "dark":
+            self.linenumbers.config(bg='#404040')
+        else:
+            self.linenumbers.config(bg='#E0E0E0')
+        self._schedule_update()
 
     def __getattr__(self, name):
         try:
@@ -281,8 +295,10 @@ class PluginManager:
         try:
             # プラグインディレクトリを一時的にパスに追加
             sys.path.insert(0, str(self.plugin_dir))
-            module = importlib.import_module(plugin_name)
-            sys.path.pop(0)
+            try:
+                module = importlib.import_module(plugin_name)
+            finally:
+                sys.path.pop(0)
 
             for _, obj in inspect.getmembers(module, inspect.isclass):
                 if (issubclass(obj, IPlugin) and 
@@ -326,7 +342,14 @@ class PluginManager:
 class ConfigManager:
     def __init__(self):
         self.config = configparser.ConfigParser()
-        self.config_file = Path("config.ini")
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys.executable).parent
+        else:
+            try:
+                base_dir = Path(__file__).resolve().parent
+            except NameError:
+                base_dir = Path.cwd()
+        self.config_file = base_dir / "config.ini"
         self._load_config()
 
     def _load_config(self) -> None:
@@ -637,6 +660,9 @@ class BranchDialog(tk.Toplevel):
     
     def _on_ok(self):
         text = self.text_entry.get().strip()
+        if not text:
+            messagebox.showerror("エラー", "選択肢テキストを入力してください。", parent=self)
+            return
         if not self.target_id:
             messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self)
             return
@@ -724,6 +750,8 @@ class NovelGameEditor:
         # コアコンポーネントの初期化
         self.config_manager = ConfigManager()
         self.plugin_manager = PluginManager(self)
+        self._base_title = "ノベルゲーム制作支援ツール"
+        self._is_loading = False
         
         # データ状態
         self.pluggable_data_keys: Dict[str, Any] = {}
@@ -1001,13 +1029,16 @@ class NovelGameEditor:
         else:
             return
 
+        SCROLL_SPEED = 30
         if is_control_pressed:
             factor = 1.1 if direction > 0 else 1/1.1
             self._zoom(factor, event.x, event.y)
         elif is_shift_pressed:
-            self.canvas.xview_scroll(-1 * direction, "units")
+            self.view_offset_x += SCROLL_SPEED * direction / self.scale
+            self._redraw_canvas()
         else:
-            self.canvas.yview_scroll(-1 * direction, "units")
+            self.view_offset_y += SCROLL_SPEED * direction / self.scale
+            self._redraw_canvas()
 
     def _on_canvas_press(self, event):
         """キャンバス上でマウスボタンが押された時の処理"""
@@ -1162,9 +1193,11 @@ class NovelGameEditor:
         self.scene_content_text.delete("1.0", tk.END)
         
         if is_scene_selected:
+            self._is_loading = True
             self.scene_name_entry.insert(0, self.selected_scene.name)
             self.scene_content_text.insert("1.0", self.selected_scene.content)
             self.scene_content_text.text.edit_modified(False)
+            self._is_loading = False
             
         self.add_branch_btn.config(state=state)
         self._update_branch_list()
@@ -1209,7 +1242,8 @@ class NovelGameEditor:
             self.scene_content_text.text.edit_modified(False)
             return
 
-        self._mark_dirty()
+        if not self._is_loading:
+            self._mark_dirty()
 
         content = self.scene_content_text.get("1.0", "end-1c")
         char_count = len(content)
@@ -1230,14 +1264,9 @@ class NovelGameEditor:
         """変更状態をマーク"""
         if self.is_dirty == dirty:
             return
-            
+
         self.is_dirty = dirty
-        title = self.root.title()
-        
-        if dirty and not title.endswith(" *"):
-            self.root.title(title + " *")
-        elif not dirty and title.endswith(" *"):
-            self.root.title(title[:-2])
+        self.root.title(self._base_title + (" *" if dirty else ""))
 
     def _world_to_screen(self, x: float, y: float) -> Tuple[float, float]:
         """ワールド座標からスクリーン座標に変換"""
@@ -1388,7 +1417,8 @@ class NovelGameEditor:
         # ビュー状態のリセット
         self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, DEFAULT_ZOOM
         
-        self.root.title("ノベルゲーム制作支援ツール - 無題")
+        self._base_title = "ノベルゲーム制作支援ツール - 無題"
+        self.root.title(self._base_title)
         self._mark_dirty(False)
         self._update_editor_ui_state()
         self._redraw_canvas()
@@ -1428,11 +1458,12 @@ class NovelGameEditor:
             self.selected_scene = None
             self.view_offset_x, self.view_offset_y, self.scale = 0.0, 0.0, DEFAULT_ZOOM
             
-            self.root.title(f"ノベルゲーム制作支援ツール - {self.current_project_path.name}")
+            self._base_title = f"ノベルゲーム制作支援ツール - {self.current_project_path.name}"
+            self.root.title(self._base_title)
             self._mark_dirty(False)
             self._update_editor_ui_state()
             self._redraw_canvas()
-            
+
             self.config_manager.add_recent_file(path)
             self._update_recent_files_menu()
             self._update_status_bar(f"プロジェクト '{path.name}' を開きました。")
@@ -1459,8 +1490,9 @@ class NovelGameEditor:
             
         path = Path(path_str)
         self.current_project_path = path
-        self.root.title(f"ノベルゲーム制作支援ツール - {path.name}")
-        
+        self._base_title = f"ノベルゲーム制作支援ツール - {path.name}"
+        self.root.title(self._base_title)
+
         return self._save_to_file(path)
 
     def _save_to_file(self, path: Path, update_dirty_flag: bool = True) -> bool:
@@ -1539,13 +1571,10 @@ class NovelGameEditor:
             accelerator=self.config_manager.get_shortcut_display('add_scene')
         )
 
-    def add_scene(self, event=None, at_screen_pos: Optional[Tuple[float, float]] = None, 
-                 return_scene=False, at_canvas_pos=None):
+    def add_scene(self, event=None, return_scene=False, at_canvas_pos=None):
         """新しいシーンを追加"""
         if at_canvas_pos:
             wx, wy = self._screen_to_world(at_canvas_pos[0], at_canvas_pos[1])
-        elif at_screen_pos:
-            wx, wy = self._screen_to_world(at_screen_pos[0], at_screen_pos[1])
         else:
             wx, wy = self._screen_to_world(
                 self.canvas.winfo_width() / 2,
@@ -1691,6 +1720,7 @@ class NovelGameEditor:
         """テーマを設定"""
         sv_ttk.set_theme(theme_name)
         self.canvas.config(bg="#333333" if theme_name == "dark" else "#F0F0F0")
+        self.scene_content_text.update_theme_colors(theme_name)
         self._redraw_canvas()
 
     def _zoom(self, factor, x=None, y=None):
