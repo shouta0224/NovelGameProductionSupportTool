@@ -173,6 +173,7 @@ cython_debug/
 # This project
 backups/
 *.ngp
+config.ini
 
 # PyPI configuration file
 .pypirc

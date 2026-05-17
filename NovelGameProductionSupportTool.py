@@ -607,6 +607,7 @@ class BranchDialog(tk.Toplevel):
         self.text_entry.grid(row=0, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
         self.text_entry.insert(0, initial_text)
         self.text_entry.focus_set()
+        self.text_entry.bind("<Return>", lambda e: self._on_ok())
         
         ttk.Label(frame, text="遷移先シーン:").grid(
             row=1, column=0, sticky="w", padx=5, pady=5
@@ -631,6 +632,7 @@ class BranchDialog(tk.Toplevel):
         self.condition_entry = ttk.Entry(frame, width=40)
         self.condition_entry.grid(row=2, column=1, columnspan=2, sticky="ew", padx=5, pady=5)
         self.condition_entry.insert(0, initial_condition)
+        self.condition_entry.bind("<Return>", lambda e: self._on_ok())
         
         btn_frame = ttk.Frame(frame)
         btn_frame.grid(row=3, column=0, columnspan=3, pady=(15, 0))
