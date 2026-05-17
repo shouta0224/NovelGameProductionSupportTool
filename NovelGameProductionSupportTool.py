@@ -1208,8 +1208,12 @@ class NovelGameEditor:
 
     def _update_text_info(self, event=None):
         """テキスト情報を更新"""
+        if not self.selected_scene:
+            self.scene_content_text.text.edit_modified(False)
+            return
+
         self._mark_dirty()
-        
+
         content = self.scene_content_text.get("1.0", "end-1c")
         char_count = len(content)
         line_count = content.count("\n") + 1
