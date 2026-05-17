@@ -660,9 +660,6 @@ class BranchDialog(tk.Toplevel):
     
     def _on_ok(self):
         text = self.text_entry.get().strip()
-        if not text:
-            messagebox.showerror("エラー", "選択肢テキストを入力してください。", parent=self)
-            return
         if not self.target_id:
             messagebox.showerror("エラー", "遷移先シーンを選択してください。", parent=self)
             return
