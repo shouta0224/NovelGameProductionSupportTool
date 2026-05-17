@@ -107,6 +107,13 @@ python NovelGameProductionSupportTool.py
 
 プラグインの有効/無効は「プラグイン」メニュー → 「プラグイン管理」から切り替えられます（再起動が必要）。
 
+### プラグインで使えるライブラリについて
+
+> **EXE版をお使いの方へ**
+> プラグインで使用できるのは **Python 標準ライブラリ** と **tkinter（全サブモジュール含む）** のみです。
+> `pip install` でインストールする外部ライブラリ（`PIL`、`numpy` など）はEXE版では動作しません。
+> ソースから起動する場合（`python NovelGameProductionSupportTool.py`）はこの制限はありません。
+
 ### プラグインの作り方
 
 `IPlugin` クラスを継承し、`setup()` / `register()` / `teardown()` を実装するだけです。
